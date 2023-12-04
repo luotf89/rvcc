@@ -4,6 +4,21 @@
 
 using namespace rvcc;
 
+AstNode* Parser::binaryOp(AstNode* left, AstNode*right, AstNodeType type) {
+  AstNode* res = new AstNode;
+  res->getLeft() = left;
+  res->getRight() = right;
+  res->getType() = type;
+  return res;
+}
+
+AstNode* Parser::unaryOp(AstNode*right, AstNodeType type) {
+  AstNode* res = new AstNode;
+  res->getRight() = right;
+  res->getType() = type;
+  return res;
+}
+
 void Parser::init() {
   lexer.init();
 }
@@ -15,25 +30,42 @@ AstNode* Parser::parser_expr() {
     char punct = *(lexer.getCurrToken().getLoc());
     lexer.consumerToken();
     if (punct == '+') {
-      expr = AstNode::binaryOp(expr, parser_mul(), AstNodeType::NODE_ADD);
+      expr = binaryOp(expr, parser_mul(), AstNodeType::NODE_ADD);
     } else {
-      expr = AstNode::binaryOp(expr, parser_mul(), AstNodeType::NODE_SUB);
+      expr = binaryOp(expr, parser_mul(), AstNodeType::NODE_SUB);
     }
   }
   return expr;
 }
 
 AstNode* Parser::parser_mul() {
-  AstNode* expr = parser_primary();
+  AstNode* expr = parser_unary();
   while(*(lexer.getCurrToken().getLoc()) == '*' || 
         *(lexer.getCurrToken().getLoc()) == '/') {
     char punct = *(lexer.getCurrToken().getLoc());
     lexer.consumerToken();
     if (punct == '*') {
-      expr = AstNode::binaryOp(expr, parser_mul(), AstNodeType::NODE_MUL);
+      expr = binaryOp(expr, parser_unary(), AstNodeType::NODE_MUL);
     } else {
-      expr = AstNode::binaryOp(expr, parser_mul(), AstNodeType::NODE_DIV);
+      expr = binaryOp(expr, parser_unary(), AstNodeType::NODE_DIV);
     }
+  }
+  return expr;
+}
+
+AstNode* Parser::parser_unary() {
+  AstNode* expr;
+  if (*(lexer.getCurrToken().getLoc()) == '+' || 
+        *(lexer.getCurrToken().getLoc()) == '-') {
+    char punct = *(lexer.getCurrToken().getLoc());
+    lexer.consumerToken();
+    if (punct == '+') {
+      expr = unaryOp(parser_unary(), AstNodeType::NODE_POSITIVE);
+    } else {
+      expr = unaryOp(parser_unary(), AstNodeType::NODE_NEGATIVE);
+    }
+  } else {
+    expr = parser_primary();
   }
   return expr;
 }

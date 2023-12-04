@@ -11,7 +11,8 @@
 一元操作：括号 数值
 二元操作：加减乘除
 expr = mul(+mul|-mul)*
-mul = primary(*primary|/primary)*
+mul = unary(*unary|/unary)*
+unary = +|-(unary)*|primary
 primary = val | "("expr")"
 */
 namespace rvcc {
@@ -20,9 +21,12 @@ namespace rvcc {
       Parser(const char* buffer):lexer(buffer){}
       void init();
       AstTree* parser_ast();
+      static AstNode* binaryOp(AstNode* left, AstNode*right, AstNodeType type);
+      static AstNode* unaryOp(AstNode*right, AstNodeType type);
     private:
       AstNode* parser_expr();
       AstNode* parser_mul();
+      AstNode* parser_unary();
       AstNode* parser_primary();
       Lexer lexer;
   };

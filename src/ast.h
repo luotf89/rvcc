@@ -10,6 +10,8 @@ namespace rvcc {
     NODE_MUL = 2,
     NODE_DIV = 3,
     NODE_NUM = 4,
+    NODE_NEGATIVE = 5,
+    NODE_POSITIVE = 6,
     Node_ILLEGAL = 5
   };
   class AstNode{
@@ -33,8 +35,6 @@ namespace rvcc {
       AstNode*& getRight() {
         return right_;
       }
-
-      static AstNode* binaryOp(AstNode* left, AstNode*right, AstNodeType type);
     private:
       AstNodeType type_;
       int val_;
@@ -54,47 +54,26 @@ namespace rvcc {
       }
       using Func = std::function<void(AstNode*)>;
       template<WalkOrderType walk_order>
-      void walkLeftImpl(Func func, AstNode*curr_node) {
+      void walkImpl(Func func, AstNode*curr_node) {
         if (!curr_node) {
           return;
         }
         if constexpr (walk_order == WalkOrderType::PRE_ORDER) {
           func(curr_node);
         }
-        walkLeftImpl<walk_order>(func, curr_node->getLeft());
+        walkImpl<walk_order>(func, curr_node->getLeft());
         if constexpr(walk_order == WalkOrderType::IN_ORDER) {
           func(curr_node);
         }
-        walkLeftImpl<walk_order>(func, curr_node->getRight());
+        walkImpl<walk_order>(func, curr_node->getRight());
         if constexpr(walk_order == WalkOrderType::POST_ORDER) {
           func(curr_node);
         }
       }
-
-      template<WalkOrderType walk_order>
-      void walkRightImpl(Func func, AstNode*curr_node) {
-        if (!curr_node) {
-          return;
-        }
-        if constexpr (walk_order == WalkOrderType::PRE_ORDER) {
-          func(curr_node);
-        }
-        walkRightImpl<walk_order>(func, curr_node->getRight());
-        if constexpr(walk_order == WalkOrderType::IN_ORDER) {
-          func(curr_node);
-        }
-        walkRightImpl<walk_order>(func, curr_node->getLeft());
-        if constexpr(walk_order == WalkOrderType::POST_ORDER) {
-          func(curr_node);
-        }
-      }
-
-      template<WalkOrderType walk_order>
-      void walk(Func func) {
+      void computer(Func func) {
         // walkLeftImpl<walk_order>(func, root);
-        walkRightImpl<walk_order>(func, root);
+        walkImpl<WalkOrderType::POST_ORDER>(func, root);
       }
-
     private:
       AstNode* root;
   };

@@ -28,56 +28,87 @@ int main(int argc, char** argv) {
   Parser parser(argv[1]);
   AstTree* ast = parser.parser_ast();
 
-  printf(".globl main\n");
-  printf("main:\n");
-  ast->walk<AstTree::WalkOrderType::POST_ORDER>([](AstNode* curr_node) {
-    if (curr_node->getType() == AstNodeType::NODE_ADD) {
-      curr_node->getValue() = curr_node->getLeft()->getValue() + curr_node->getRight()->getValue();
-      printf("  ld a1, 0(sp)\n");
-      printf("  addi sp, sp, 8\n");
-      printf("  ld a0, 0(sp)\n");
-      printf("  addi sp, sp, 8\n");
-      printf("  add a0, a0, a1\n");
-      printf("  addi sp, sp, -8\n");
-      printf("  sd a0, 0(sp)\n");
-    } else if (curr_node->getType() == AstNodeType::NODE_SUB) {
-      curr_node->getValue() = curr_node->getLeft()->getValue() - curr_node->getRight()->getValue();
-      printf("  ld a1, 0(sp)\n");
-      printf("  addi sp, sp, 8\n");
-      printf("  ld a0, 0(sp)\n");
-      printf("  addi sp, sp, 8\n");
-      printf("  sub a0, a0, a1\n");
-      printf("  addi sp, sp, -8\n");
-      printf("  sd a0, 0(sp)\n");
-    } else if (curr_node->getType() == AstNodeType::NODE_MUL) {
-      curr_node->getValue() = curr_node->getLeft()->getValue() * curr_node->getRight()->getValue();
-      printf("  ld a1, 0(sp)\n");
-      printf("  addi sp, sp, 8\n");
-      printf("  ld a0, 0(sp)\n");
-      printf("  addi sp, sp, 8\n");
-      printf("  mul a0, a0, a1\n");
-      printf("  addi sp, sp, -8\n");
-      printf("  sd a0, 0(sp)\n");
-    } else if (curr_node->getType() == AstNodeType::NODE_DIV) {
-      curr_node->getValue() = curr_node->getLeft()->getValue() / curr_node->getRight()->getValue();
-      printf("  ld a1, 0(sp)\n");
-      printf("  addi sp, sp, 8\n");
-      printf("  ld a0, 0(sp)\n");
-      printf("  addi sp, sp, 8\n");
-      printf("  div a0, a0, a1\n");
-      printf("  addi sp, sp, -8\n");
-      printf("  sd a0, 0(sp)\n");
-    } else if (curr_node->getType() == AstNodeType::NODE_NUM) {
-      printf("  li a0, %d\n", curr_node->getValue());
-      printf("  addi sp, sp, -8\n");
-      printf("  sd a0, 0(sp)\n");
-    } else {
-      std::cout << "can't process current type: " << static_cast<int>(curr_node->getType()) << std::endl;
-    }
-  });
-  
-  printf("  ld a0, 0(sp)\n");
-  printf("  addi sp, sp, 8\n");
-  printf("  ret\n");
+  auto codegen = [&](){
+    printf(".globl main\n");
+    printf("main:\n");
+    ast->computer([](AstNode* curr_node) {
+      if (curr_node->getType() == AstNodeType::NODE_ADD) {
+        printf("  ld a1, 0(sp)\n");
+        printf("  addi sp, sp, 8\n");
+        printf("  ld a0, 0(sp)\n");
+        printf("  addi sp, sp, 8\n");
+        printf("  add a0, a0, a1\n");
+        printf("  addi sp, sp, -8\n");
+        printf("  sd a0, 0(sp)\n");
+      } else if (curr_node->getType() == AstNodeType::NODE_SUB) {
+        printf("  ld a1, 0(sp)\n");
+        printf("  addi sp, sp, 8\n");
+        printf("  ld a0, 0(sp)\n");
+        printf("  addi sp, sp, 8\n");
+        printf("  sub a0, a0, a1\n");
+        printf("  addi sp, sp, -8\n");
+        printf("  sd a0, 0(sp)\n");
+      } else if (curr_node->getType() == AstNodeType::NODE_MUL) {
+        printf("  ld a1, 0(sp)\n");
+        printf("  addi sp, sp, 8\n");
+        printf("  ld a0, 0(sp)\n");
+        printf("  addi sp, sp, 8\n");
+        printf("  mul a0, a0, a1\n");
+        printf("  addi sp, sp, -8\n");
+        printf("  sd a0, 0(sp)\n");
+      } else if (curr_node->getType() == AstNodeType::NODE_DIV) {
+        printf("  ld a1, 0(sp)\n");
+        printf("  addi sp, sp, 8\n");
+        printf("  ld a0, 0(sp)\n");
+        printf("  addi sp, sp, 8\n");
+        printf("  div a0, a0, a1\n");
+        printf("  addi sp, sp, -8\n");
+        printf("  sd a0, 0(sp)\n");
+      } else if (curr_node->getType() == AstNodeType::NODE_NUM) {
+        printf("  li a0, %d\n", curr_node->getValue());
+        printf("  addi sp, sp, -8\n");
+        printf("  sd a0, 0(sp)\n");
+      } else if (curr_node->getType() == AstNodeType::NODE_POSITIVE) {
+
+      } else if (curr_node->getType() == AstNodeType::NODE_NEGATIVE) {
+        printf("  ld a0, 0(sp)\n");
+        printf("  addi sp, sp, 8\n");
+        printf("  neg a0, a0\n");
+        printf("  addi sp, sp, -8\n");
+        printf("  sd a0, 0(sp)\n");
+      } else {
+        std::cout << "can't process current type: " << static_cast<int>(curr_node->getType()) << std::endl;
+      }
+    });
+    
+    printf("  ld a0, 0(sp)\n");
+    printf("  addi sp, sp, 8\n");
+    printf("  ret\n");
+  };
+
+  auto compute = [&]() {
+    ast->computer([](AstNode* curr_node) {
+      if (curr_node->getType() == AstNodeType::NODE_ADD) {
+        curr_node->getValue() = curr_node->getLeft()->getValue() + curr_node->getRight()->getValue();
+      } else if (curr_node->getType() == AstNodeType::NODE_SUB) {
+        curr_node->getValue() = curr_node->getLeft()->getValue() - curr_node->getRight()->getValue();
+      } else if (curr_node->getType() == AstNodeType::NODE_MUL) {
+        curr_node->getValue() = curr_node->getLeft()->getValue() * curr_node->getRight()->getValue();
+      } else if (curr_node->getType() == AstNodeType::NODE_DIV) {
+        curr_node->getValue() = curr_node->getLeft()->getValue() / curr_node->getRight()->getValue();
+      } else if (curr_node->getType() == AstNodeType::NODE_NUM) {
+      } else if (curr_node->getType() == AstNodeType::NODE_POSITIVE) {
+        curr_node->getValue() = curr_node->getRight()->getValue();
+      } else if (curr_node->getType() == AstNodeType::NODE_NEGATIVE) {
+        curr_node->getValue() = curr_node->getRight()->getValue() * (-1);
+      } else {
+        std::cout << "can't process current type: " << static_cast<int>(curr_node->getType()) << std::endl;
+      }
+    });
+    std::cout << "result: " << ast->getRoot()->getValue() << std::endl;
+  };
+  // compute();
+  codegen();
+
   return 0;
 }
