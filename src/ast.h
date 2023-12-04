@@ -5,14 +5,17 @@
 #include <functional>
 namespace rvcc {
   enum class AstNodeType{
-    NODE_ADD = 0,
-    NODE_SUB = 1,
-    NODE_MUL = 2,
-    NODE_DIV = 3,
-    NODE_NUM = 4,
-    NODE_NEGATIVE = 5,
-    NODE_POSITIVE = 6,
-    Node_ILLEGAL = 5
+    NODE_ADD = 0,             // add
+    NODE_SUB = 1,             // sub
+    NODE_MUL = 2,             // mul
+    NODE_DIV = 3,             // div
+    NODE_NUM = 4,             // number
+    NODE_NEG = 5,             // negative          
+    NODE_EQ = 6,              // equal
+    NODE_NE = 7,              // not equal
+    NODE_LT = 8,              // less than
+    NODE_LE = 9,            // less equal
+    Node_ILLEGAL = 12         // illegal
   };
   class AstNode{
     public:
@@ -22,7 +25,8 @@ namespace rvcc {
         left_ = nullptr;
         right_ = nullptr;
       }
-      AstNode(AstNodeType type, int val, AstNode* left, AstNode* right):type_(type), val_(val),left_(left),right_(right) {}
+      AstNode(AstNodeType type, int val, AstNode* left, AstNode* right):
+        type_(type), val_(val),left_(left),right_(right) {}
       AstNodeType& getType() {
         return type_;
       }

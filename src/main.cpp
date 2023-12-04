@@ -28,87 +28,143 @@ int main(int argc, char** argv) {
   Parser parser(argv[1]);
   AstTree* ast = parser.parser_ast();
 
-  auto codegen = [&](){
-    printf(".globl main\n");
-    printf("main:\n");
-    ast->computer([](AstNode* curr_node) {
-      if (curr_node->getType() == AstNodeType::NODE_ADD) {
-        printf("  ld a1, 0(sp)\n");
-        printf("  addi sp, sp, 8\n");
-        printf("  ld a0, 0(sp)\n");
-        printf("  addi sp, sp, 8\n");
-        printf("  add a0, a0, a1\n");
-        printf("  addi sp, sp, -8\n");
-        printf("  sd a0, 0(sp)\n");
-      } else if (curr_node->getType() == AstNodeType::NODE_SUB) {
-        printf("  ld a1, 0(sp)\n");
-        printf("  addi sp, sp, 8\n");
-        printf("  ld a0, 0(sp)\n");
-        printf("  addi sp, sp, 8\n");
-        printf("  sub a0, a0, a1\n");
-        printf("  addi sp, sp, -8\n");
-        printf("  sd a0, 0(sp)\n");
-      } else if (curr_node->getType() == AstNodeType::NODE_MUL) {
-        printf("  ld a1, 0(sp)\n");
-        printf("  addi sp, sp, 8\n");
-        printf("  ld a0, 0(sp)\n");
-        printf("  addi sp, sp, 8\n");
-        printf("  mul a0, a0, a1\n");
-        printf("  addi sp, sp, -8\n");
-        printf("  sd a0, 0(sp)\n");
-      } else if (curr_node->getType() == AstNodeType::NODE_DIV) {
-        printf("  ld a1, 0(sp)\n");
-        printf("  addi sp, sp, 8\n");
-        printf("  ld a0, 0(sp)\n");
-        printf("  addi sp, sp, 8\n");
-        printf("  div a0, a0, a1\n");
-        printf("  addi sp, sp, -8\n");
-        printf("  sd a0, 0(sp)\n");
-      } else if (curr_node->getType() == AstNodeType::NODE_NUM) {
-        printf("  li a0, %d\n", curr_node->getValue());
-        printf("  addi sp, sp, -8\n");
-        printf("  sd a0, 0(sp)\n");
-      } else if (curr_node->getType() == AstNodeType::NODE_POSITIVE) {
-
-      } else if (curr_node->getType() == AstNodeType::NODE_NEGATIVE) {
-        printf("  ld a0, 0(sp)\n");
-        printf("  addi sp, sp, 8\n");
-        printf("  neg a0, a0\n");
-        printf("  addi sp, sp, -8\n");
-        printf("  sd a0, 0(sp)\n");
-      } else {
-        std::cout << "can't process current type: " << static_cast<int>(curr_node->getType()) << std::endl;
-      }
-    });
+  [&](){
+    auto push_ = [](const char* reg) {
+      printf("  addi sp, sp, -8\n");
+      printf("  sd %s, 0(sp)\n", reg);
+    }; 
+    auto pop_ = [](const char* reg) {
+      printf("  ld %s, 0(sp)\n", reg);
+      printf("  addi sp, sp, 8\n");
+    };
+    auto add_ = [](const char* reg1, const char* reg2, const char* reg3) {
+      printf("  add %s, %s, %s\n", reg1, reg2, reg3);
+    };
+    auto sub_ = [](const char* reg1, const char* reg2, const char* reg3) {
+      printf("  sub %s, %s, %s\n", reg1, reg2, reg3);
+    };
+    auto mul_ = [](const char* reg1, const char* reg2, const char* reg3) {
+      printf("  mul %s, %s, %s\n", reg1, reg2, reg3);
+    };
+    auto div_ = [](const char* reg1, const char* reg2, const char* reg3) {
+      printf("  div %s, %s, %s\n", reg1, reg2, reg3);
+    };
+    auto xor_ = [](const char* reg1, const char* reg2, const char* reg3) {
+      printf("  xor %s, %s, %s\n", reg1, reg2, reg3);
+    };
+    auto xori_ = [](const char* reg1, const char* reg2, int val) {
+      printf("  xori %s, %s, %d\n", reg1, reg2, val);
+    };
+    auto seqz_ = [](const char* reg1, const char* reg2) {
+      printf("  seqz %s, %s\n", reg1, reg2);
+    };
+    auto snez_ = [](const char* reg1, const char* reg2) {
+      printf("  snez %s, %s\n", reg1, reg2);
+    };
+    auto slt_ = [](const char* reg1, const char* reg2, const char* reg3) {
+      printf("  slt %s, %s, %s\n", reg1, reg2, reg3);
+    };
+    auto li_ = [](const char* reg, int val) {
+      printf("  li %s, %d\n", reg, val);
+    };
+    auto neg_ = [](const char* reg1, const char* reg2) {
+      printf("  neg %s, %s\n", reg1, reg2);
+    };
+    auto start_ = []() {
+      printf(".globl main\n");
+      printf("main:\n");
+    };
+    auto ret_ = []() {
+      printf("  ret\n");
+    };
     
-    printf("  ld a0, 0(sp)\n");
-    printf("  addi sp, sp, 8\n");
-    printf("  ret\n");
-  };
-
-  auto compute = [&]() {
-    ast->computer([](AstNode* curr_node) {
+    start_();
+    ast->computer([&](AstNode* curr_node) {
       if (curr_node->getType() == AstNodeType::NODE_ADD) {
-        curr_node->getValue() = curr_node->getLeft()->getValue() + curr_node->getRight()->getValue();
+        pop_("a1");
+        pop_("a0");
+        add_("a0", "a0", "a1");
+        push_("a0");
       } else if (curr_node->getType() == AstNodeType::NODE_SUB) {
-        curr_node->getValue() = curr_node->getLeft()->getValue() - curr_node->getRight()->getValue();
+        pop_("a1");
+        pop_("a0");
+        sub_("a0", "a0", "a1");
+        push_("a0");
       } else if (curr_node->getType() == AstNodeType::NODE_MUL) {
-        curr_node->getValue() = curr_node->getLeft()->getValue() * curr_node->getRight()->getValue();
+        pop_("a1");
+        pop_("a0");
+        mul_("a0", "a0", "a1");
+        push_("a0");
       } else if (curr_node->getType() == AstNodeType::NODE_DIV) {
-        curr_node->getValue() = curr_node->getLeft()->getValue() / curr_node->getRight()->getValue();
+        pop_("a1");
+        pop_("a0");
+        div_("a0", "a0", "a1");
+        push_("a0");
       } else if (curr_node->getType() == AstNodeType::NODE_NUM) {
-      } else if (curr_node->getType() == AstNodeType::NODE_POSITIVE) {
-        curr_node->getValue() = curr_node->getRight()->getValue();
-      } else if (curr_node->getType() == AstNodeType::NODE_NEGATIVE) {
-        curr_node->getValue() = curr_node->getRight()->getValue() * (-1);
+        li_("a0", curr_node->getValue());
+        push_("a0");
+      } else if (curr_node->getType() == AstNodeType::NODE_NEG) {
+        pop_("a0");
+        neg_("a0", "a0");
+        push_("a0");
+      } else if (curr_node->getType() == AstNodeType::NODE_EQ) {
+        pop_("a1");
+        pop_("a0");
+        xor_("a0", "a0", "a1");
+        seqz_("a0", "a0");
+        push_("a0");
+      } else if (curr_node->getType() == AstNodeType::NODE_NE) {
+        pop_("a1");
+        pop_("a0");
+        xor_("a0", "a0", "a1");
+        snez_("a0", "a0");
+        push_("a0");
+      } else if (curr_node->getType() == AstNodeType::NODE_LT) {
+        pop_("a1");
+        pop_("a0");
+        slt_("a0", "a0", "a1");
+        push_("a0");
+      } else if (curr_node->getType() == AstNodeType::NODE_LE) {
+        pop_("a1");
+        pop_("a0");
+        slt_("a0", "a1", "a0");
+        xori_("a0", "a0", 1);
+        push_("a0");
       } else {
         std::cout << "can't process current type: " << static_cast<int>(curr_node->getType()) << std::endl;
       }
     });
-    std::cout << "result: " << ast->getRoot()->getValue() << std::endl;
-  };
-  // compute();
-  codegen();
+    pop_("a0");
+    ret_();
+  }();
+
+  // [&]() {
+  //   ast->computer([](AstNode* curr_node) {
+  //     if (curr_node->getType() == AstNodeType::NODE_ADD) {
+  //       curr_node->getValue() = curr_node->getLeft()->getValue() + curr_node->getRight()->getValue();
+  //     } else if (curr_node->getType() == AstNodeType::NODE_SUB) {
+  //       curr_node->getValue() = curr_node->getLeft()->getValue() - curr_node->getRight()->getValue();
+  //     } else if (curr_node->getType() == AstNodeType::NODE_MUL) {
+  //       curr_node->getValue() = curr_node->getLeft()->getValue() * curr_node->getRight()->getValue();
+  //     } else if (curr_node->getType() == AstNodeType::NODE_DIV) {
+  //       curr_node->getValue() = curr_node->getLeft()->getValue() / curr_node->getRight()->getValue();
+  //     } else if (curr_node->getType() == AstNodeType::NODE_NUM) {
+  //     } else if (curr_node->getType() == AstNodeType::NODE_NEG) {
+  //       curr_node->getValue() = curr_node->getRight()->getValue() * (-1);
+  //     } else if (curr_node->getType() == AstNodeType::NODE_EQ) {
+  //       curr_node->getValue() = curr_node->getLeft()->getValue() == curr_node->getRight()->getValue();
+  //     } else if (curr_node->getType() == AstNodeType::NODE_NE) {
+  //       curr_node->getValue() = curr_node->getLeft()->getValue() != curr_node->getRight()->getValue();
+  //     } else if (curr_node->getType() == AstNodeType::NODE_LT) {
+  //       curr_node->getValue() = curr_node->getLeft()->getValue() < curr_node->getRight()->getValue();
+  //     } else if (curr_node->getType() == AstNodeType::NODE_LE) {
+  //       curr_node->getValue() = curr_node->getLeft()->getValue() <= curr_node->getRight()->getValue();
+  //     } else {
+  //       std::cout << "can't process current type: " << static_cast<int>(curr_node->getType()) << std::endl;
+  //     }
+  //   });
+  //   std::cout << "result: " << ast->getRoot()->getValue() << std::endl;
+  // }();
 
   return 0;
 }

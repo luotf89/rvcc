@@ -20,7 +20,8 @@ namespace rvcc {
         val_ = 0;
         loc_ = nullptr;
       }
-      Token(TokenType type, int val, char* loc): type_(type),val_(val), loc_(loc) {}
+      Token(TokenType type, int val, char* loc, int len): 
+        type_(type),val_(val), loc_(loc), len_(len) {}
       TokenType& getType() {
         return type_;
       }
@@ -30,6 +31,9 @@ namespace rvcc {
       char*& getLoc() {
         return loc_;
       }
+      int& getLen() {
+        return len_;
+      }
       void printTypeName() const {
         std::cout<< type_names.at(type_) << std::endl;
       }
@@ -37,6 +41,7 @@ namespace rvcc {
       TokenType type_;
       int val_;
       char* loc_;
+      int len_;
       static const std::map<TokenType, std::string> type_names;
   };
 }

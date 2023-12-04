@@ -11,7 +11,7 @@ list(APPEND CFLAGS "-Wall")
 target_compile_options(rvcc PRIVATE ${CFLAGS})
 set_target_properties(
     rvcc PROPERTIES 
-    CXX_STANDARD 14
+    CXX_STANDARD 17
     CXX_EXTENSIONS OFF
     CXX_STANDARD_REQUIRED ON
 )

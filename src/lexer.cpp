@@ -12,9 +12,10 @@ Token Lexer::getNextToken() {
     } else if (std::isdigit(*curr_pos_)) {
         new_token.getType() = TokenType::TOKEN_NUM;
         new_token.getValue() = std::strtoul(curr_pos_, &curr_pos_, 10);
-    } else if (std::ispunct(*curr_pos_)) {
+    } else if (new_token.getLen() = readPunct(curr_pos_),
+               new_token.getLen()) {
         new_token.getType() = TokenType::TOKEN_PUNCT;
-        curr_pos_++;
+        curr_pos_ += new_token.getLen();
     } else {
         new_token.getType() = TokenType::TOKEN_ILLEGAL;
         curr_pos_++;

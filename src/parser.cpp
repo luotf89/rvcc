@@ -1,5 +1,6 @@
 #include "parser.h"
 #include "ast.h"
+#include "lexer.h"
 #include "token.h"
 
 using namespace rvcc;
@@ -24,6 +25,50 @@ void Parser::init() {
 }
 
 AstNode* Parser::parser_expr() {
+  AstNode* expr = parser_relation();
+  while(lexer.getCurrToken().getLen() == 2 &&
+        (Lexer::startWith(lexer.getCurrToken().getLoc(), "==")  || 
+         Lexer::startWith(lexer.getCurrToken().getLoc(), "!="))) {
+    const char* curr_punct = lexer.getCurrToken().getLoc();
+    lexer.consumerToken();
+    if (Lexer::startWith(curr_punct, "==")) {
+      expr = binaryOp(expr, parser_relation(), AstNodeType::NODE_EQ);
+    } else {
+      expr = binaryOp(expr, parser_relation(), AstNodeType::NODE_NE);
+    }
+  }
+  return expr;
+}
+
+AstNode* Parser::parser_relation() {
+  AstNode* expr = parser_add();
+  while((lexer.getCurrToken().getLen() == 2 && 
+         (Lexer::startWith(lexer.getCurrToken().getLoc(), "<=") ||
+          Lexer::startWith(lexer.getCurrToken().getLoc(), ">="))) ||
+        (lexer.getCurrToken().getLen() == 1 && 
+         (Lexer::startWith(lexer.getCurrToken().getLoc(), "<") ||
+          Lexer::startWith(lexer.getCurrToken().getLoc(), ">")))) {
+    const char* curr_punct = lexer.getCurrToken().getLoc();
+    int curr_len = lexer.getCurrToken().getLen();
+    lexer.consumerToken();
+    if (curr_len == 1) {
+      if (Lexer::startWith(curr_punct, ">")) {
+        expr = binaryOp(parser_add(), expr, AstNodeType::NODE_LT);
+      } else {
+        expr = binaryOp(expr, parser_add(), AstNodeType::NODE_LT);
+      }
+    } else {
+      if (Lexer::startWith(curr_punct, ">=")) {
+        expr = binaryOp(parser_add(), expr, AstNodeType::NODE_LE);
+      } else {
+        expr = binaryOp(expr, parser_add(), AstNodeType::NODE_LE);
+      }
+    }
+  }
+  return expr;
+}
+
+AstNode* Parser::parser_add() {
   AstNode* expr = parser_mul();
   while(*(lexer.getCurrToken().getLoc()) == '+' || 
         *(lexer.getCurrToken().getLoc()) == '-') {
@@ -60,9 +105,9 @@ AstNode* Parser::parser_unary() {
     char punct = *(lexer.getCurrToken().getLoc());
     lexer.consumerToken();
     if (punct == '+') {
-      expr = unaryOp(parser_unary(), AstNodeType::NODE_POSITIVE);
+      expr = parser_unary();
     } else {
-      expr = unaryOp(parser_unary(), AstNodeType::NODE_NEGATIVE);
+      expr = unaryOp(parser_unary(), AstNodeType::NODE_NEG);
     }
   } else {
     expr = parser_primary();

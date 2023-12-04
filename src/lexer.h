@@ -4,7 +4,7 @@
 #include "token.h"
 #include <cctype>
 #include <cstdlib>
-#include <string>
+#include <cstring>
 
 namespace rvcc {
   class Lexer {
@@ -18,6 +18,16 @@ namespace rvcc {
       }
       Token getCurrToken() {
         return curr_;
+      }
+      static bool startWith(const char* str, const char* sub_str) {
+        return std::strncmp(str, sub_str, strlen(sub_str)) == 0;
+      }
+      static int readPunct(const char* str) {
+        if (startWith(str, "==") || startWith(str, "!=") ||
+            startWith(str, ">=") || startWith(str, "<=")) {
+          return 2;
+        } 
+        return ispunct(*str) ? 1 : 0;
       }
     private:
       Token getNextToken();

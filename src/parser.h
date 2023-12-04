@@ -4,15 +4,11 @@
 #include "lexer.h"
 #include "ast.h"
 /*
-从表达式中构建ast
-表达式比如 1+(2+3)*4+5*(2+3)
-有表达式优先级可知 括号 > 乘除 > 加减
-因此表达式 主要有两类操作：
-一元操作：括号 数值
-二元操作：加减乘除
-expr = mul(+mul|-mul)*
-mul = unary(*unary|/unary)*
-unary = +|-(unary)*|primary
+expr =  relation ("==" relation | "!=" relation)*
+relation = add ("<" add | ">" add | "<=" add | ">=" add)*
+add = mul ("+" mul | "-" mul)*
+mul = unary ("*" unary | "/" unary)*
+unary = ("+" | "-" )unary | primary
 primary = val | "("expr")"
 */
 namespace rvcc {
@@ -25,6 +21,8 @@ namespace rvcc {
       static AstNode* unaryOp(AstNode*right, AstNodeType type);
     private:
       AstNode* parser_expr();
+      AstNode* parser_relation();
+      AstNode* parser_add();
       AstNode* parser_mul();
       AstNode* parser_unary();
       AstNode* parser_primary();
