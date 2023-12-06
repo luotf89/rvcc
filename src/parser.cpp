@@ -2,6 +2,7 @@
 #include "ast.h"
 #include "lexer.h"
 #include "token.h"
+#include <cstdlib>
 
 using namespace rvcc;
 
@@ -22,6 +23,31 @@ AstNode* Parser::unaryOp(AstNode*right, AstNodeType type) {
 
 void Parser::init() {
   lexer.init();
+}
+
+AstNode* Parser::parser_program() {
+  AstNode* program = parser_stmt();
+  while(lexer.getCurrToken().getType() != TokenType::TOKEN_EOF) {
+    program->getNext() = parser_stmt();
+  }
+  return program;
+}
+
+AstNode* Parser::parser_stmt() {
+  AstNode* stmt =  new AstNode();
+  stmt->getType() = AstNodeType::NODE_STMT;
+  stmt->getLeft() = parser_expr();
+  if (lexer.getCurrToken().getType() == TokenType::TOKEN_PUNCT &&
+      *(lexer.getCurrToken().getLoc()) == ';' &&
+      lexer.getCurrToken().getLen() == 1) {
+    lexer.consumerToken();
+    return stmt;
+  }
+  std::cout << "parser stmt failed  expect current token ';' but got "
+            << lexer.getCurrToken().getLoc()
+            << std::endl;
+  exit(-1);
+  return nullptr;;
 }
 
 AstNode* Parser::parser_expr() {
@@ -118,7 +144,8 @@ AstNode* Parser::parser_unary() {
 AstNode* Parser::parser_primary() {
   AstNode* expr;
   if (lexer.getCurrToken().getType() == TokenType::TOKEN_NUM) {
-    expr = new AstNode(AstNodeType::NODE_NUM, lexer.getCurrToken().getValue(), nullptr, nullptr);
+    expr = new AstNode(AstNodeType::NODE_NUM, lexer.getCurrToken().getValue(),
+                  nullptr, nullptr, nullptr);
     lexer.consumerToken();
   } else {
     lexer.consumerToken();
@@ -131,6 +158,6 @@ AstNode* Parser::parser_primary() {
 AstTree* Parser::parser_ast() {
   init();
   AstTree* ast = new AstTree;
-  ast->getRoot() = parser_expr();
+  ast->getRoot() = parser_program();
   return ast;
 }

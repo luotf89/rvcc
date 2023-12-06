@@ -4,6 +4,8 @@
 #include "lexer.h"
 #include "ast.h"
 /*
+program = (stmt)+
+stmt = expr ";"
 expr =  relation ("==" relation | "!=" relation)*
 relation = add ("<" add | ">" add | "<=" add | ">=" add)*
 add = mul ("+" mul | "-" mul)*
@@ -20,6 +22,8 @@ namespace rvcc {
       static AstNode* binaryOp(AstNode* left, AstNode*right, AstNodeType type);
       static AstNode* unaryOp(AstNode*right, AstNodeType type);
     private:
+      AstNode* parser_program();
+      AstNode* parser_stmt();
       AstNode* parser_expr();
       AstNode* parser_relation();
       AstNode* parser_add();

@@ -15,6 +15,7 @@ namespace rvcc {
     NODE_NE = 7,              // not equal
     NODE_LT = 8,              // less than
     NODE_LE = 9,            // less equal
+    NODE_STMT = 10,
     Node_ILLEGAL = 12         // illegal
   };
   class AstNode{
@@ -24,9 +25,10 @@ namespace rvcc {
         val_ = 0;
         left_ = nullptr;
         right_ = nullptr;
+        next_ = nullptr;
       }
-      AstNode(AstNodeType type, int val, AstNode* left, AstNode* right):
-        type_(type), val_(val),left_(left),right_(right) {}
+      AstNode(AstNodeType type, int val, AstNode* left, AstNode* right, AstNode* next):
+        type_(type), val_(val),left_(left),right_(right), next_(next) {}
       AstNodeType& getType() {
         return type_;
       }
@@ -39,11 +41,15 @@ namespace rvcc {
       AstNode*& getRight() {
         return right_;
       }
+      AstNode*& getNext() {
+        return next_;
+      }
     private:
       AstNodeType type_;
       int val_;
       AstNode* left_;
       AstNode* right_;
+      AstNode* next_;
   };
 
   class AstTree{
@@ -76,7 +82,14 @@ namespace rvcc {
       }
       void computer(Func func) {
         // walkLeftImpl<walk_order>(func, root);
-        walkImpl<WalkOrderType::POST_ORDER>(func, root);
+        AstNode* curr_node = root;
+        while (curr_node) {
+          if(curr_node->getType() != AstNodeType::NODE_STMT) {
+            std::cout << __FUNCTION__ << __LINE__ << "computer failed exepect current node is stmt" << std::endl;
+          }
+          walkImpl<WalkOrderType::POST_ORDER>(func, curr_node->getLeft());
+          curr_node = curr_node->getNext();
+        }
       }
     private:
       AstNode* root;
