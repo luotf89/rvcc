@@ -6,7 +6,9 @@
 /*
 program = (stmt)+
 stmt = expr ";"
-expr =  relation ("==" relation | "!=" relation)*
+expr = assign
+assign = equality (= assign)*
+equality =  relation ("==" relation | "!=" relation)*
 relation = add ("<" add | ">" add | "<=" add | ">=" add)*
 add = mul ("+" mul | "-" mul)*
 mul = unary ("*" unary | "/" unary)*
@@ -25,6 +27,8 @@ namespace rvcc {
       AstNode* parser_program();
       AstNode* parser_stmt();
       AstNode* parser_expr();
+      AstNode* parser_assign();
+      AstNode* parser_equality();
       AstNode* parser_relation();
       AstNode* parser_add();
       AstNode* parser_mul();

@@ -2,6 +2,7 @@
 #include "ast.h"
 #include "lexer.h"
 #include "token.h"
+#include <cstdint>
 #include <cstdlib>
 
 using namespace rvcc;
@@ -27,8 +28,10 @@ void Parser::init() {
 
 AstNode* Parser::parser_program() {
   AstNode* program = parser_stmt();
+  AstNode* curr_stmt = program;
   while(lexer.getCurrToken().getType() != TokenType::TOKEN_EOF) {
-    program->getNext() = parser_stmt();
+    curr_stmt->getNext() = parser_stmt();
+    curr_stmt = curr_stmt->getNext();
   }
   return program;
 }
@@ -51,6 +54,22 @@ AstNode* Parser::parser_stmt() {
 }
 
 AstNode* Parser::parser_expr() {
+  AstNode* expr = parser_assign();
+  return expr;
+}
+
+AstNode* Parser::parser_assign() {
+  AstNode* expr = parser_equality();
+  while(lexer.getCurrToken().getLen() == 1 &&
+        lexer.getCurrToken().getType() == TokenType::TOKEN_PUNCT &&
+        *(lexer.getCurrToken().getLoc()) == '=' ) {
+    lexer.consumerToken();
+    expr = binaryOp(expr, parser_assign(), AstNodeType::NODE_ASSIGN);
+  }
+  return expr;
+}
+
+AstNode* Parser::parser_equality() {
   AstNode* expr = parser_relation();
   while(lexer.getCurrToken().getLen() == 2 &&
         (Lexer::startWith(lexer.getCurrToken().getLoc(), "==")  || 
@@ -146,6 +165,10 @@ AstNode* Parser::parser_primary() {
   if (lexer.getCurrToken().getType() == TokenType::TOKEN_NUM) {
     expr = new AstNode(AstNodeType::NODE_NUM, lexer.getCurrToken().getValue(),
                   nullptr, nullptr, nullptr);
+    lexer.consumerToken();
+  } else if (lexer.getCurrToken().getType() == TokenType::TOKEN_ID) {
+    expr = new AstNode(AstNodeType::NODE_ID, INT32_MIN,
+                  nullptr, nullptr, nullptr, *(lexer.getCurrToken().getLoc()));
     lexer.consumerToken();
   } else {
     lexer.consumerToken();

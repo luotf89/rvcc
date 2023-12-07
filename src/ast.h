@@ -1,34 +1,46 @@
 #ifndef __AST_H
 #define __AST_H
+
 #include "lexer.h"
 #include "token.h"
+#include <cstdint>
 #include <functional>
+#include <limits>
+
 namespace rvcc {
   enum class AstNodeType{
-    NODE_ADD = 0,             // add
-    NODE_SUB = 1,             // sub
-    NODE_MUL = 2,             // mul
-    NODE_DIV = 3,             // div
-    NODE_NUM = 4,             // number
-    NODE_NEG = 5,             // negative          
-    NODE_EQ = 6,              // equal
-    NODE_NE = 7,              // not equal
-    NODE_LT = 8,              // less than
-    NODE_LE = 9,            // less equal
-    NODE_STMT = 10,
-    Node_ILLEGAL = 12         // illegal
+    NODE_ADD,             // +
+    NODE_SUB,             // -
+    NODE_MUL,             // *
+    NODE_DIV,             // /
+    NODE_NUM,             // number
+    NODE_NEG,             // '-'          
+    NODE_EQ,              // ==
+    NODE_NE,              // !=
+    NODE_LT,              // <
+    NODE_LE,              // <=
+    NODE_ID,              // identify
+    NODE_ASSIGN,          // =
+    NODE_STMT,
+    Node_ILLEGAL          // illegal
   };
   class AstNode{
     public:
       AstNode() {
         type_ = AstNodeType::Node_ILLEGAL;
-        val_ = 0;
+        val_ = INT32_MIN;
         left_ = nullptr;
         right_ = nullptr;
         next_ = nullptr;
       }
-      AstNode(AstNodeType type, int val, AstNode* left, AstNode* right, AstNode* next):
-        type_(type), val_(val),left_(left),right_(right), next_(next) {}
+      AstNode(AstNodeType type,
+              int val = INT32_MIN,
+              AstNode* left = nullptr,
+              AstNode* right = nullptr,
+              AstNode* next = nullptr,
+              char var = '\0'):
+        type_(type), val_(val),left_(left),
+        right_(right), next_(next), var_(var) {}
       AstNodeType& getType() {
         return type_;
       }
@@ -44,12 +56,16 @@ namespace rvcc {
       AstNode*& getNext() {
         return next_;
       }
+      char& getVar() {
+        return var_;
+      }
     private:
       AstNodeType type_;
       int val_;
       AstNode* left_;
       AstNode* right_;
       AstNode* next_;
+      char var_;
   };
 
   class AstTree{

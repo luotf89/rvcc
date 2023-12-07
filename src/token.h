@@ -7,6 +7,7 @@
 
 namespace rvcc {
   enum class TokenType{
+    TOKEN_ID,
     TOKEN_PUNCT,
     TOKEN_NUM,
     TOKEN_EOF,
