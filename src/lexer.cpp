@@ -23,6 +23,10 @@ Token Lexer::getNextToken() {
       }
       new_token.getType() = TokenType::TOKEN_ID;
       new_token.getLen() = curr_pos_ - new_token.getLoc();
+      if (startWith(new_token.getLoc(), "return") && 
+          new_token.getLen() == strlen("return")) {
+        new_token.getType() = TokenType::TOKEN_KEYWORD;
+      }
     } else if (new_token.getLen() = readPunct(curr_pos_),
                new_token.getLen()) {
         new_token.getType() = TokenType::TOKEN_PUNCT;

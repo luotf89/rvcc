@@ -11,6 +11,7 @@ namespace rvcc {
     TOKEN_PUNCT,
     TOKEN_NUM,
     TOKEN_EOF,
+    TOKEN_KEYWORD,
     TOKEN_ILLEGAL,
     TOKEN_COUNT
   };

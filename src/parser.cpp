@@ -1,6 +1,7 @@
 #include "parser.h"
 #include "ast.h"
 #include "lexer.h"
+#include "logger.h"
 #include "utils.h"
 #include "token.h"
 #include <cassert>
@@ -35,17 +36,21 @@ Expr* Parser::parser_program() {
 Expr* Parser::parser_stmt() {
   StmtExpr* stmt =  new StmtExpr;
   stmt->type() = ExprType::NODE_STMT;
-  stmt->left() = parser_expr();
+  if (lexer_.getCurrToken().getType() == TokenType::TOKEN_KEYWORD &&
+      Lexer::startWith(lexer_.getCurrToken().getLoc(), "return")) {
+    lexer_.consumerToken();
+    stmt->left() = unaryOp(parser_expr(), ExprType::NODE_RETURN);
+  } else {
+    stmt->left() = parser_expr();
+  }
   if (lexer_.getCurrToken().getType() == TokenType::TOKEN_PUNCT &&
       *(lexer_.getCurrToken().getLoc()) == ';' &&
       lexer_.getCurrToken().getLen() == 1) {
     lexer_.consumerToken();
     return stmt;
   }
-  std::cout << "parser stmt failed  expect current token ';' but got "
-            << lexer_.getCurrToken().getLoc()
-            << std::endl;
-  exit(-1);
+  int pos = lexer_.getCurrToken().getLoc() - lexer_.getBuf() + 1;
+  FATAL("parser stmt failed  expect current token is ';'\n %s\n%*s", lexer_.getBuf(), pos, "^");
   return nullptr;;
 }
 

@@ -28,6 +28,7 @@ enum class ExprType:int{
   NODE_ID,              // identify
   NODE_ASSIGN,          // =
   NODE_STMT,
+  NODE_RETURN,          
   NODE_ILLEGAL,         // illegal
   NODE_COUNT
 };

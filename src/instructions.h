@@ -22,5 +22,7 @@ void ret_();
 void push_(const char* reg);
 void pop_(const char* reg);
 void start_();
+void goto_return_lable_();
+void return_lable_();
 
 #endif

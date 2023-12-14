@@ -7,6 +7,7 @@ const char* Token::type_names[static_cast<int>(TokenType::TOKEN_COUNT)] {
   "TOKEN_EOF",
   "TOKEN_NUM",
   "TOKEN_PUNCT",
+  "TOKEN_KEYWORD",
   "TOKEN_ILLEGAL"
 };
 

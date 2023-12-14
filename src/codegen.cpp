@@ -17,6 +17,7 @@ void Codegen::codegen() {
   mv_("fp", "sp");
   addi_("sp", "sp", -8*stack_size);
   ast_->codegen();
+  return_lable_();
   pop_("a0");
   mv_("sp", "fp");
   pop_("fp");

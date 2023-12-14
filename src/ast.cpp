@@ -255,6 +255,9 @@ Expr* UnaryExpr::getRight() {
 int UnaryExpr::computer() {
   switch (type()) {
   case ExprType::NODE_NEG:
+    value() = -getLeft()->value();
+    break;
+  case ExprType::NODE_RETURN:
     value() = getLeft()->value();
     break;
   default:
@@ -269,6 +272,9 @@ void UnaryExpr::codegen() {
     pop_("a0");
     neg_("a0", "a0");
     push_("a0");
+    break;
+  case ExprType::NODE_RETURN:
+    goto_return_lable_();
     break;
   default:
     ERROR("unary expr cant support current type: %s", getTypeName());
@@ -504,6 +510,9 @@ int Function::computer() {
   while(curr) {
     walkImpl<WalkOrderType::POST_ORDER>(func, curr->getLeft());
     prev = curr;
+    if (curr->getLeft()->type() == ExprType::NODE_RETURN) {
+      break;
+    }
     curr = curr->getNext();
   };
   if (!prev) {

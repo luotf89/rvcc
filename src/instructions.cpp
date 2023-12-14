@@ -65,3 +65,11 @@ void start_() {
     printf(".globl main\n");
     printf("main:\n");
 };
+
+void goto_return_lable_() {
+    printf("  j .L.return\n");
+}
+
+void return_lable_() {
+    printf(".L.return:\n");
+}
