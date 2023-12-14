@@ -16,10 +16,13 @@ Token Lexer::getNextToken() {
       new_token.getType() = TokenType::TOKEN_NUM;
       new_token.getValue() = std::strtoul(curr_pos_, &curr_pos_, 10);
       new_token.getLen() = curr_pos_ - tmp;
-    } else if (std::isalpha(*curr_pos_)) {
-        new_token.getType() = TokenType::TOKEN_ID;
-        new_token.getLen() = 1;
+    } else if (std::isalpha(*curr_pos_) || *curr_pos_ == '_') {
+      curr_pos_++;
+      while(std::isalpha(*curr_pos_) || *curr_pos_ == '_' || std::isdigit(*curr_pos_)) {
         curr_pos_++;
+      }
+      new_token.getType() = TokenType::TOKEN_ID;
+      new_token.getLen() = curr_pos_ - new_token.getLoc();
     } else if (new_token.getLen() = readPunct(curr_pos_),
                new_token.getLen()) {
         new_token.getType() = TokenType::TOKEN_PUNCT;
@@ -41,4 +44,22 @@ void Lexer::init() {
     return;
   }
   curr_ = getNextToken();
+}
+
+bool Lexer::startWith(const char* str, const char* sub_str) {
+  return std::strncmp(str, sub_str, strlen(sub_str)) == 0;
+}
+
+int Lexer::readPunct(const char* str) {
+  if (startWith(str, "==") || startWith(str, "!=") ||
+      startWith(str, ">=") || startWith(str, "<=")) {
+    return 2;
+  } 
+  return ispunct(*str) ? 1 : 0;
+}
+
+void Lexer::skipSpace() {
+  while(std::isspace(*curr_pos_)) {
+    curr_pos_++;
+  }
 }

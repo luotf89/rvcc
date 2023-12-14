@@ -6,23 +6,19 @@
 #include <iostream>
 
 namespace rvcc {
-  enum class TokenType{
-    TOKEN_ID,
+  enum class TokenType:int{
+    TOKEN_ID = 0,
     TOKEN_PUNCT,
     TOKEN_NUM,
     TOKEN_EOF,
     TOKEN_ILLEGAL,
+    TOKEN_COUNT
   };
 
   class Token {
     public:
-      Token() {
-        type_ = TokenType::TOKEN_ILLEGAL;
-        val_ = 0;
-        loc_ = nullptr;
-      }
-      Token(TokenType type, int val, char* loc, int len): 
-        type_(type),val_(val), loc_(loc), len_(len) {}
+      Token();
+      Token(TokenType type, int val, char* loc, int len);
       TokenType& getType() {
         return type_;
       }
@@ -35,15 +31,13 @@ namespace rvcc {
       int& getLen() {
         return len_;
       }
-      void printTypeName() const {
-        std::cout<< type_names.at(type_) << std::endl;
-      }
+      const char* getTypeName() const;
     private:
       TokenType type_;
       int val_;
       char* loc_;
       int len_;
-      static const std::map<TokenType, std::string> type_names;
+      static const char* type_names[static_cast<int>(TokenType::TOKEN_COUNT)];
   };
 }
 #endif

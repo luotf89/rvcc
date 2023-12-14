@@ -3,9 +3,10 @@
 
 #include "lexer.h"
 #include "ast.h"
+#include <cstddef>
 /*
 program = (stmt)+
-stmt = expr ";"
+stmt = "return" expr ";" | expr ";"
 expr = assign
 assign = equality (= assign)*
 equality =  relation ("==" relation | "!=" relation)*
@@ -18,23 +19,24 @@ primary = val | "("expr")"
 namespace rvcc {
   class Parser{
     public:
-      Parser(const char* buffer):lexer(buffer){}
+      Parser(const char* buffer):lexer_(buffer){}
       void init();
-      AstTree* parser_ast();
-      static AstNode* binaryOp(AstNode* left, AstNode*right, AstNodeType type);
-      static AstNode* unaryOp(AstNode*right, AstNodeType type);
+      Ast* parser_ast();
+      static Expr* binaryOp(Expr* left, Expr*right, ExprType type);
+      static Expr* unaryOp(Expr* left, ExprType type);
     private:
-      AstNode* parser_program();
-      AstNode* parser_stmt();
-      AstNode* parser_expr();
-      AstNode* parser_assign();
-      AstNode* parser_equality();
-      AstNode* parser_relation();
-      AstNode* parser_add();
-      AstNode* parser_mul();
-      AstNode* parser_unary();
-      AstNode* parser_primary();
-      Lexer lexer;
+      Expr* parser_program();
+      Expr* parser_stmt();
+      Expr* parser_expr();
+      Expr* parser_assign();
+      Expr* parser_equality();
+      Expr* parser_relation();
+      Expr* parser_add();
+      Expr* parser_mul();
+      Expr* parser_unary();
+      Expr* parser_primary();
+      Lexer lexer_;
+      std::map<std::size_t, Var*> var_maps_;
   };
 }
 #endif

@@ -19,23 +19,11 @@ namespace rvcc {
       Token getCurrToken() {
         return curr_;
       }
-      static bool startWith(const char* str, const char* sub_str) {
-        return std::strncmp(str, sub_str, strlen(sub_str)) == 0;
-      }
-      static int readPunct(const char* str) {
-        if (startWith(str, "==") || startWith(str, "!=") ||
-            startWith(str, ">=") || startWith(str, "<=")) {
-          return 2;
-        } 
-        return ispunct(*str) ? 1 : 0;
-      }
+      static bool startWith(const char* str, const char* sub_str);
+      static int readPunct(const char* str);
     private:
       Token getNextToken();
-      void skipSpace() {
-        while(std::isspace(*curr_pos_)) {
-          curr_pos_++;
-        }
-      }
+      void skipSpace();
       Token curr_;
       char* curr_pos_;
       const char* const buffer_;

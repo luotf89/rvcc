@@ -1,158 +1,154 @@
 #include "parser.h"
 #include "ast.h"
 #include "lexer.h"
+#include "utils.h"
 #include "token.h"
-#include <cstdint>
+#include <cassert>
 #include <cstdlib>
+
 
 using namespace rvcc;
 
-AstNode* Parser::binaryOp(AstNode* left, AstNode*right, AstNodeType type) {
-  AstNode* res = new AstNode;
-  res->getLeft() = left;
-  res->getRight() = right;
-  res->getType() = type;
-  return res;
+Expr* Parser::binaryOp(Expr* left, Expr*right, ExprType type) {
+  return new BinaryExpr(type, 0, left, right);
 }
 
-AstNode* Parser::unaryOp(AstNode*right, AstNodeType type) {
-  AstNode* res = new AstNode;
-  res->getRight() = right;
-  res->getType() = type;
-  return res;
+Expr* Parser::unaryOp(Expr*left, ExprType type) {
+  return new UnaryExpr(type, 0, left);
 }
 
 void Parser::init() {
-  lexer.init();
+  lexer_.init();
 }
 
-AstNode* Parser::parser_program() {
-  AstNode* program = parser_stmt();
-  AstNode* curr_stmt = program;
-  while(lexer.getCurrToken().getType() != TokenType::TOKEN_EOF) {
-    curr_stmt->getNext() = parser_stmt();
+Expr* Parser::parser_program() {
+  Expr* program = parser_stmt();
+  Expr* curr_stmt = program;
+  while(lexer_.getCurrToken().getType() != TokenType::TOKEN_EOF) {
+    assert(typeid(*curr_stmt) == typeid(StmtExpr));
+    dynamic_cast<StmtExpr*>(curr_stmt)->next() = parser_stmt();
     curr_stmt = curr_stmt->getNext();
   }
   return program;
 }
 
-AstNode* Parser::parser_stmt() {
-  AstNode* stmt =  new AstNode();
-  stmt->getType() = AstNodeType::NODE_STMT;
-  stmt->getLeft() = parser_expr();
-  if (lexer.getCurrToken().getType() == TokenType::TOKEN_PUNCT &&
-      *(lexer.getCurrToken().getLoc()) == ';' &&
-      lexer.getCurrToken().getLen() == 1) {
-    lexer.consumerToken();
+Expr* Parser::parser_stmt() {
+  StmtExpr* stmt =  new StmtExpr;
+  stmt->type() = ExprType::NODE_STMT;
+  stmt->left() = parser_expr();
+  if (lexer_.getCurrToken().getType() == TokenType::TOKEN_PUNCT &&
+      *(lexer_.getCurrToken().getLoc()) == ';' &&
+      lexer_.getCurrToken().getLen() == 1) {
+    lexer_.consumerToken();
     return stmt;
   }
   std::cout << "parser stmt failed  expect current token ';' but got "
-            << lexer.getCurrToken().getLoc()
+            << lexer_.getCurrToken().getLoc()
             << std::endl;
   exit(-1);
   return nullptr;;
 }
 
-AstNode* Parser::parser_expr() {
-  AstNode* expr = parser_assign();
+Expr* Parser::parser_expr() {
+  Expr* expr = parser_assign();
   return expr;
 }
 
-AstNode* Parser::parser_assign() {
-  AstNode* expr = parser_equality();
-  while(lexer.getCurrToken().getLen() == 1 &&
-        lexer.getCurrToken().getType() == TokenType::TOKEN_PUNCT &&
-        *(lexer.getCurrToken().getLoc()) == '=' ) {
-    lexer.consumerToken();
-    expr = binaryOp(expr, parser_assign(), AstNodeType::NODE_ASSIGN);
+Expr* Parser::parser_assign() {
+  Expr* expr = parser_equality();
+  while(lexer_.getCurrToken().getLen() == 1 &&
+        lexer_.getCurrToken().getType() == TokenType::TOKEN_PUNCT &&
+        *(lexer_.getCurrToken().getLoc()) == '=' ) {
+    lexer_.consumerToken();
+    expr = binaryOp(expr, parser_assign(), ExprType::NODE_ASSIGN);
   }
   return expr;
 }
 
-AstNode* Parser::parser_equality() {
-  AstNode* expr = parser_relation();
-  while(lexer.getCurrToken().getLen() == 2 &&
-        (Lexer::startWith(lexer.getCurrToken().getLoc(), "==")  || 
-         Lexer::startWith(lexer.getCurrToken().getLoc(), "!="))) {
-    const char* curr_punct = lexer.getCurrToken().getLoc();
-    lexer.consumerToken();
+Expr* Parser::parser_equality() {
+  Expr* expr = parser_relation();
+  while(lexer_.getCurrToken().getLen() == 2 &&
+        (Lexer::startWith(lexer_.getCurrToken().getLoc(), "==")  || 
+         Lexer::startWith(lexer_.getCurrToken().getLoc(), "!="))) {
+    const char* curr_punct = lexer_.getCurrToken().getLoc();
+    lexer_.consumerToken();
     if (Lexer::startWith(curr_punct, "==")) {
-      expr = binaryOp(expr, parser_relation(), AstNodeType::NODE_EQ);
+      expr = binaryOp(expr, parser_relation(), ExprType::NODE_EQ);
     } else {
-      expr = binaryOp(expr, parser_relation(), AstNodeType::NODE_NE);
+      expr = binaryOp(expr, parser_relation(), ExprType::NODE_NE);
     }
   }
   return expr;
 }
 
-AstNode* Parser::parser_relation() {
-  AstNode* expr = parser_add();
-  while((lexer.getCurrToken().getLen() == 2 && 
-         (Lexer::startWith(lexer.getCurrToken().getLoc(), "<=") ||
-          Lexer::startWith(lexer.getCurrToken().getLoc(), ">="))) ||
-        (lexer.getCurrToken().getLen() == 1 && 
-         (Lexer::startWith(lexer.getCurrToken().getLoc(), "<") ||
-          Lexer::startWith(lexer.getCurrToken().getLoc(), ">")))) {
-    const char* curr_punct = lexer.getCurrToken().getLoc();
-    int curr_len = lexer.getCurrToken().getLen();
-    lexer.consumerToken();
+Expr* Parser::parser_relation() {
+  Expr* expr = parser_add();
+  while((lexer_.getCurrToken().getLen() == 2 && 
+         (Lexer::startWith(lexer_.getCurrToken().getLoc(), "<=") ||
+          Lexer::startWith(lexer_.getCurrToken().getLoc(), ">="))) ||
+        (lexer_.getCurrToken().getLen() == 1 && 
+         (Lexer::startWith(lexer_.getCurrToken().getLoc(), "<") ||
+          Lexer::startWith(lexer_.getCurrToken().getLoc(), ">")))) {
+    const char* curr_punct = lexer_.getCurrToken().getLoc();
+    int curr_len = lexer_.getCurrToken().getLen();
+    lexer_.consumerToken();
     if (curr_len == 1) {
       if (Lexer::startWith(curr_punct, ">")) {
-        expr = binaryOp(parser_add(), expr, AstNodeType::NODE_LT);
+        expr = binaryOp(parser_add(), expr, ExprType::NODE_LT);
       } else {
-        expr = binaryOp(expr, parser_add(), AstNodeType::NODE_LT);
+        expr = binaryOp(expr, parser_add(), ExprType::NODE_LT);
       }
     } else {
       if (Lexer::startWith(curr_punct, ">=")) {
-        expr = binaryOp(parser_add(), expr, AstNodeType::NODE_LE);
+        expr = binaryOp(parser_add(), expr, ExprType::NODE_LE);
       } else {
-        expr = binaryOp(expr, parser_add(), AstNodeType::NODE_LE);
+        expr = binaryOp(expr, parser_add(), ExprType::NODE_LE);
       }
     }
   }
   return expr;
 }
 
-AstNode* Parser::parser_add() {
-  AstNode* expr = parser_mul();
-  while(*(lexer.getCurrToken().getLoc()) == '+' || 
-        *(lexer.getCurrToken().getLoc()) == '-') {
-    char punct = *(lexer.getCurrToken().getLoc());
-    lexer.consumerToken();
+Expr* Parser::parser_add() {
+  Expr* expr = parser_mul();
+  while(*(lexer_.getCurrToken().getLoc()) == '+' || 
+        *(lexer_.getCurrToken().getLoc()) == '-') {
+    char punct = *(lexer_.getCurrToken().getLoc());
+    lexer_.consumerToken();
     if (punct == '+') {
-      expr = binaryOp(expr, parser_mul(), AstNodeType::NODE_ADD);
+      expr = binaryOp(expr, parser_mul(), ExprType::NODE_ADD);
     } else {
-      expr = binaryOp(expr, parser_mul(), AstNodeType::NODE_SUB);
+      expr = binaryOp(expr, parser_mul(), ExprType::NODE_SUB);
     }
   }
   return expr;
 }
 
-AstNode* Parser::parser_mul() {
-  AstNode* expr = parser_unary();
-  while(*(lexer.getCurrToken().getLoc()) == '*' || 
-        *(lexer.getCurrToken().getLoc()) == '/') {
-    char punct = *(lexer.getCurrToken().getLoc());
-    lexer.consumerToken();
+Expr* Parser::parser_mul() {
+  Expr* expr = parser_unary();
+  while(*(lexer_.getCurrToken().getLoc()) == '*' || 
+        *(lexer_.getCurrToken().getLoc()) == '/') {
+    char punct = *(lexer_.getCurrToken().getLoc());
+    lexer_.consumerToken();
     if (punct == '*') {
-      expr = binaryOp(expr, parser_unary(), AstNodeType::NODE_MUL);
+      expr = binaryOp(expr, parser_unary(), ExprType::NODE_MUL);
     } else {
-      expr = binaryOp(expr, parser_unary(), AstNodeType::NODE_DIV);
+      expr = binaryOp(expr, parser_unary(), ExprType::NODE_DIV);
     }
   }
   return expr;
 }
 
-AstNode* Parser::parser_unary() {
-  AstNode* expr;
-  if (*(lexer.getCurrToken().getLoc()) == '+' || 
-        *(lexer.getCurrToken().getLoc()) == '-') {
-    char punct = *(lexer.getCurrToken().getLoc());
-    lexer.consumerToken();
+Expr* Parser::parser_unary() {
+  Expr* expr;
+  if (*(lexer_.getCurrToken().getLoc()) == '+' || 
+        *(lexer_.getCurrToken().getLoc()) == '-') {
+    char punct = *(lexer_.getCurrToken().getLoc());
+    lexer_.consumerToken();
     if (punct == '+') {
       expr = parser_unary();
     } else {
-      expr = unaryOp(parser_unary(), AstNodeType::NODE_NEG);
+      expr = unaryOp(parser_unary(), ExprType::NODE_NEG);
     }
   } else {
     expr = parser_primary();
@@ -160,27 +156,37 @@ AstNode* Parser::parser_unary() {
   return expr;
 }
 
-AstNode* Parser::parser_primary() {
-  AstNode* expr;
-  if (lexer.getCurrToken().getType() == TokenType::TOKEN_NUM) {
-    expr = new AstNode(AstNodeType::NODE_NUM, lexer.getCurrToken().getValue(),
-                  nullptr, nullptr, nullptr);
-    lexer.consumerToken();
-  } else if (lexer.getCurrToken().getType() == TokenType::TOKEN_ID) {
-    expr = new AstNode(AstNodeType::NODE_ID, INT32_MIN,
-                  nullptr, nullptr, nullptr, *(lexer.getCurrToken().getLoc()));
-    lexer.consumerToken();
+Expr* Parser::parser_primary() {
+  Expr* expr;
+  if (lexer_.getCurrToken().getType() == TokenType::TOKEN_NUM) {
+    expr = new NumExpr(lexer_.getCurrToken().getValue());
+    lexer_.consumerToken();
+  } else if (lexer_.getCurrToken().getType() == TokenType::TOKEN_ID) {
+    std::size_t hash_value = getstrHash(lexer_.getCurrToken().getLoc(),
+                                       lexer_.getCurrToken().getLen());
+    Var* var = nullptr;
+    if (var_maps_.count(hash_value) == 0) {
+      var = new Var(lexer_.getCurrToken().getLoc(), 
+                   lexer_.getCurrToken().getLen());
+      assert(var_maps_.insert({hash_value, var}).second);
+    } else {
+      var = var_maps_[hash_value];
+    }
+    expr = new IdentityExpr(var);
+    lexer_.consumerToken();
   } else {
-    lexer.consumerToken();
+    lexer_.consumerToken();
     expr = parser_expr();
-    lexer.consumerToken();
+    lexer_.consumerToken();
   }
   return expr;
 }
 
-AstTree* Parser::parser_ast() {
+Ast* Parser::parser_ast() {
   init();
-  AstTree* ast = new AstTree;
-  ast->getRoot() = parser_program();
+  Ast* ast = new Ast;
+  ast->root() = new Function();
+  ast->root()->body() = parser_program();
+  ast->root()->var_maps() = std::move(var_maps_);
   return ast;
 }
