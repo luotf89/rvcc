@@ -84,6 +84,13 @@ Expr* Parser::parser_stmt() {
     lexer_.consumerToken();
     stmt = parser_compound_stmt();
   } else {
+    if (lexer_.getCurrToken().getType() == TokenType::TOKEN_PUNCT &&
+        *(lexer_.getCurrToken().getLoc()) == ';' &&
+        lexer_.getCurrToken().getLen() == 1) {
+      lexer_.consumerToken();
+      stmt = new CompoundStmtExpr;
+      return stmt;
+    }
     stmt =  new StmtExpr;
     stmt->type() = ExprType::NODE_STMT;
     dynamic_cast<StmtExpr*>(stmt)->left() = parser_expr();
