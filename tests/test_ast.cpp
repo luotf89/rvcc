@@ -7,15 +7,17 @@
 using namespace rvcc;
 
 int main(int argc, char** argv) {
+  if (argc != 2) {
+    fprintf(stderr, "args num should be two");
+    return -1;
+  }
 
   Logger::getInst().level() = Logger::LogLevel::DEBUG;
 
-  const char* input = "foo2=70; bar4=4; foo2+bar4;";
-
-  Parser parser(input);
+  Parser parser(argv[1]);
   Ast* ast = parser.parser_ast();
   ast->visualization("graph.dot");
   Codegen* codegen = new Codegen(ast);
-  assert( codegen->compute()== 74);
-  return 0;
+  auto ret = codegen->compute();
+  return ret;
 }

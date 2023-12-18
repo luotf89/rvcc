@@ -23,35 +23,73 @@ void Parser::init() {
 }
 
 Expr* Parser::parser_program() {
-  Expr* program = parser_stmt();
-  Expr* curr_stmt = program;
-  while(lexer_.getCurrToken().getType() != TokenType::TOKEN_EOF) {
-    assert(typeid(*curr_stmt) == typeid(StmtExpr));
-    dynamic_cast<StmtExpr*>(curr_stmt)->next() = parser_stmt();
-    curr_stmt = curr_stmt->getNext();
-  }
+  assert(lexer_.getCurrToken().getType() == TokenType::TOKEN_PUNCT &&
+         *(lexer_.getCurrToken().getLoc()) == '{' &&
+         lexer_.getCurrToken().getLen() == 1);
+  lexer_.consumerToken();
+  Expr* program = parser_compound_stmt();
   return program;
 }
 
+Expr* Parser::parser_compound_stmt() {
+  CompoundStmtExpr* compound_stmt = new CompoundStmtExpr();
+  StmtExpr* head = new StmtExpr();
+  Expr* curr_stmt = head; 
+  while(!((lexer_.getCurrToken().getType() == TokenType::TOKEN_PUNCT &&
+          *(lexer_.getCurrToken().getLoc()) == '}' &&
+          lexer_.getCurrToken().getLen() == 1)  ||
+          (lexer_.getCurrToken().getType() == TokenType::TOKEN_EOF))) {
+    if (curr_stmt->type() == ExprType::NODE_STMT) {
+      dynamic_cast<StmtExpr*>(curr_stmt)->next() = parser_stmt();
+    } else if (curr_stmt->type() == ExprType::NODE_COMPOUND) {
+      dynamic_cast<CompoundStmtExpr*>(curr_stmt)->next() = parser_stmt();
+    } else {
+      FATAL("expect curr node is stmt or compound stmt but got %s", curr_stmt->getTypeName());
+    }
+    curr_stmt = curr_stmt->getNext();
+  }
+  if (lexer_.getCurrToken().getType() == TokenType::TOKEN_EOF) {
+    int pos = lexer_.getCurrToken().getLoc() - lexer_.getBuf() + 1;
+    FATAL("parser compound stmt failed  expect current token is '}'\n %s\n%*s", lexer_.getBuf(), pos, "^");
+  }
+  lexer_.consumerToken();
+  compound_stmt->stmts() = head->getNext();
+  head->next() = nullptr;
+  delete head;
+  return compound_stmt;
+}
+
 Expr* Parser::parser_stmt() {
-  StmtExpr* stmt =  new StmtExpr;
-  stmt->type() = ExprType::NODE_STMT;
+  auto endWithComma = [&]() {
+    if (!(lexer_.getCurrToken().getType() == TokenType::TOKEN_PUNCT &&
+        *(lexer_.getCurrToken().getLoc()) == ';' &&
+        lexer_.getCurrToken().getLen() == 1)) {
+      int pos = lexer_.getCurrToken().getLoc() - lexer_.getBuf() + 1;
+      FATAL("parser stmt failed  expect current token is ';'\n %s\n%*s", lexer_.getBuf(), pos, "^");
+    }
+    lexer_.consumerToken();
+  };
+  Expr* stmt;
+  
   if (lexer_.getCurrToken().getType() == TokenType::TOKEN_KEYWORD &&
       Lexer::startWith(lexer_.getCurrToken().getLoc(), "return")) {
     lexer_.consumerToken();
-    stmt->left() = unaryOp(parser_expr(), ExprType::NODE_RETURN);
-  } else {
-    stmt->left() = parser_expr();
-  }
-  if (lexer_.getCurrToken().getType() == TokenType::TOKEN_PUNCT &&
-      *(lexer_.getCurrToken().getLoc()) == ';' &&
-      lexer_.getCurrToken().getLen() == 1) {
+    stmt =  new StmtExpr;
+    stmt->type() = ExprType::NODE_STMT;
+    dynamic_cast<StmtExpr*>(stmt)->left() = unaryOp(parser_expr(), ExprType::NODE_RETURN);
+    endWithComma();
+  } else if (lexer_.getCurrToken().getType() == TokenType::TOKEN_PUNCT &&
+             *(lexer_.getCurrToken().getLoc()) == '{' &&
+             lexer_.getCurrToken().getLen() == 1) {
     lexer_.consumerToken();
-    return stmt;
+    stmt = parser_compound_stmt();
+  } else {
+    stmt =  new StmtExpr;
+    stmt->type() = ExprType::NODE_STMT;
+    dynamic_cast<StmtExpr*>(stmt)->left() = parser_expr();
+    endWithComma();
   }
-  int pos = lexer_.getCurrToken().getLoc() - lexer_.getBuf() + 1;
-  FATAL("parser stmt failed  expect current token is ';'\n %s\n%*s", lexer_.getBuf(), pos, "^");
-  return nullptr;;
+  return stmt;
 }
 
 Expr* Parser::parser_expr() {

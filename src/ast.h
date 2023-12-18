@@ -28,7 +28,8 @@ enum class ExprType:int{
   NODE_ID,              // identify
   NODE_ASSIGN,          // =
   NODE_STMT,
-  NODE_RETURN,          
+  NODE_RETURN,
+  NODE_COMPOUND,         
   NODE_ILLEGAL,         // illegal
   NODE_COUNT
 };
@@ -42,7 +43,7 @@ class Var{
     int& value();
     int& offset();
   private:
-    const char* name_;
+    const char* name_; // name 共享 输入buffer 制作， 不需要释放
     int len_;
     int value_;
     int offset_; // codegen 再栈中的相对栈帧的偏移
@@ -53,9 +54,10 @@ class Expr {
     explicit Expr(ExprType type);
     Expr();
     virtual ~Expr() {}
-    virtual Expr* getNext() = 0;
-    virtual Expr* getLeft() = 0;
-    virtual Expr* getRight() = 0;
+    virtual Expr* getNext();
+    virtual Expr* getLeft();
+    virtual Expr* getRight();
+    virtual Expr* getStmts();
     virtual int computer() = 0;
     virtual void codegen() = 0;
     virtual int& value() = 0;
@@ -64,114 +66,12 @@ class Expr {
     ExprType& type();
     const char* getTypeName() const;
     void ident(std::ostringstream& oss, int& ident_num);
-  private:
-    int id_;
-    ExprType type_;
-    static std::atomic_int g_id;
-    static const char* type_names[static_cast<int>(ExprType::NODE_COUNT)];
 
-};
-
-class BinaryExpr: public Expr {
-  public:
-    BinaryExpr();
-    BinaryExpr(ExprType type, int value=0,
-      Expr* left=nullptr, Expr* right=nullptr);
-    virtual Expr* getNext() override;
-    virtual Expr* getLeft() override;
-    virtual Expr* getRight() override;
-    virtual int computer() override;
-    virtual void codegen() override;
-    virtual int& value() override;
-    virtual void visualize(std::ostringstream& oss, int& ident_num) override;
-    Expr*& left();
-    Expr*& right();
-  private:
-    int value_;
-    Expr* left_;
-    Expr* right_;
-};
-
-class UnaryExpr: public Expr {
-  public:
-    UnaryExpr();
-    UnaryExpr(ExprType type, int value=0, Expr* left=nullptr);
-    virtual Expr* getNext() override;
-    virtual Expr* getLeft() override;
-    virtual Expr* getRight() override;
-    virtual int computer() override;
-    virtual void codegen() override;
-    virtual int& value() override;
-    virtual void visualize(std::ostringstream& oss, int& ident_num) override;
-    Expr*& left();
-  private:
-    int value_;
-    Expr* left_;
-};
-
-class NumExpr: public Expr {
-  public:
-    NumExpr(int value=0);
-    virtual Expr* getNext() override;
-    virtual Expr* getLeft() override;
-    virtual Expr* getRight() override;
-    virtual int computer() override;
-    virtual void codegen() override;
-    virtual int& value() override;
-    virtual void visualize(std::ostringstream& oss, int& ident_num) override;
-  private:
-    int value_;
-};
-
-class IdentityExpr: public Expr {
-  public:
-    IdentityExpr(Var* var=0);
-    virtual Expr* getNext() override;
-    virtual Expr* getLeft() override;
-    virtual Expr* getRight() override;
-    virtual int computer() override;
-    virtual void codegen() override;
-    virtual int& value() override;
-    virtual void visualize(std::ostringstream& oss, int& ident_num) override;
-    Var*& var();
-  private:
-    Var* var_;
-};
-
-class StmtExpr: public Expr {
-  public:
-    StmtExpr(Expr* next=nullptr, Expr* left=nullptr);
-    virtual Expr* getNext() override;
-    virtual Expr* getLeft() override;
-    virtual Expr* getRight() override;
-    virtual int computer() override;
-    virtual void codegen() override;
-    virtual int& value() override; // stmt value is id
-    virtual void visualize(std::ostringstream& oss, int& ident_num) override;
-    Expr*& next();
-    Expr*& left();
-  private:
-    Expr* next_;
-    Expr* left_;
-};
-
-
-class Function {
-  public:
     enum class WalkOrderType{
       PRE_ORDER = 0,
       IN_ORDER = 1,
       POST_ORDER = 2
     };
-    Function();
-    Function(Expr* body, std::map<std::size_t, Var*>&& var_maps);
-    ~Function();
-    void getVarOffsets();
-    std::map<std::size_t, Var*>& var_maps();
-    void visualize(std::ostringstream& oss, int& ident_num);
-    int computer();
-    void codegen();
-    Expr*& body();
     using Func = std::function<void(Expr*)>;
     template<WalkOrderType walk_order>
     void static walkImpl(Func func, Expr*curr) {
@@ -190,6 +90,124 @@ class Function {
         func(curr);
       }
     }
+  private:
+    int id_;
+    ExprType type_;
+    static std::atomic_int g_id;
+    static const char* type_names[static_cast<int>(ExprType::NODE_COUNT)];
+
+};
+
+class BinaryExpr: public Expr {
+  public:
+    BinaryExpr();
+    BinaryExpr(ExprType type, int value=0,
+      Expr* left=nullptr, Expr* right=nullptr);
+    virtual Expr* getLeft() override;
+    virtual Expr* getRight() override;
+    virtual int computer() override;
+    virtual void codegen() override;
+    virtual int& value() override;
+    virtual void visualize(std::ostringstream& oss, int& ident_num) override;
+    Expr*& left();
+    Expr*& right();
+  private:
+    int value_;
+    Expr* left_;
+    Expr* right_;
+};
+
+class UnaryExpr: public Expr {
+  public:
+    UnaryExpr();
+    UnaryExpr(ExprType type, int value=0, Expr* left=nullptr);
+    virtual Expr* getLeft() override;
+    virtual int computer() override;
+    virtual void codegen() override;
+    virtual int& value() override;
+    virtual void visualize(std::ostringstream& oss, int& ident_num) override;
+    Expr*& left();
+  private:
+    int value_;
+    Expr* left_;
+};
+
+class NumExpr: public Expr {
+  public:
+    NumExpr(int value=0);
+    virtual int computer() override;
+    virtual void codegen() override;
+    virtual int& value() override;
+    virtual void visualize(std::ostringstream& oss, int& ident_num) override;
+  private:
+    int value_;
+};
+
+class IdentityExpr: public Expr {
+  public:
+    IdentityExpr(Var* var=0);
+    ~IdentityExpr();
+    virtual int computer() override;
+    virtual void codegen() override;
+    virtual int& value() override;
+    virtual void visualize(std::ostringstream& oss, int& ident_num) override;
+    Var*& var();
+  private:
+    Var* var_;
+};
+
+class StmtExpr: public Expr {
+  public:
+    StmtExpr(Expr* next=nullptr, Expr* left=nullptr, int val=0);
+    ~StmtExpr();
+    virtual Expr* getNext() override;
+    virtual Expr* getLeft() override;
+    virtual int computer() override;
+    virtual void codegen() override;
+    virtual int& value() override; // stmt value is id
+    virtual void visualize(std::ostringstream& oss, int& ident_num) override;
+    Expr*& next();
+    Expr*& left();
+    bool getReturnFlag();
+  private:
+    Expr* next_;
+    Expr* left_;
+    int val_;
+    bool return_flag_;
+};
+
+class CompoundStmtExpr: public Expr {
+  public:
+    CompoundStmtExpr(Expr* stmts=nullptr, Expr* next=nullptr, int val=0);
+    ~CompoundStmtExpr();
+    virtual Expr* getNext() override;
+    virtual Expr* getStmts() override;
+    virtual int computer() override;
+    virtual void codegen() override;
+    virtual int& value() override; // stmt value is id
+    virtual void visualize(std::ostringstream& oss, int& ident_num) override;
+    Expr*& next();
+    Expr*& stmts();
+    bool getReturnFlag();
+  private:
+    Expr* stmts_;
+    Expr* next_;
+    int val_;
+    bool return_flag_;
+};
+
+
+class Function {
+  public:
+    Function();
+    Function(Expr* body, std::map<std::size_t, Var*>&& var_maps);
+    ~Function();
+    void getVarOffsets();
+    std::map<std::size_t, Var*>& var_maps();
+    void visualize(std::ostringstream& oss, int& ident_num);
+    int computer();
+    void codegen();
+    Expr*& body(); 
   private:
     void freeNode(Expr* curr);
     Expr* body_;

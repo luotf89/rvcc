@@ -5,6 +5,10 @@
 
 using namespace rvcc;
 
+Ast*& Codegen::ast() {
+  return ast_;
+}
+
 int Codegen::compute() {
   return ast_->computer();
 }

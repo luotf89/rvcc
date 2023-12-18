@@ -3,15 +3,12 @@ mkdir build
 cd build
 cmake -S ../ -G Ninja
 ninja
-cd src
-RISCV=~/software/riscv
+cd tests
 
 assert() {
     expect="$1"
     input="$2"
-    ./rvcc "$input" >tmp.s || exit
-    riscv64-linux-gnu-gcc -static -o tmp tmp.s
-    $RISCV/bin/qemu-riscv64 -L $RISCV/sysroot ./tmp
+    ./test_ast "$input"
     actual="$?"
     # 注意 shell 脚本 "[" 和 "]" 用作test 需要空格
     if [ "$actual" = "$expect" ]; then

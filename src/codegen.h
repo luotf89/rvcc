@@ -8,6 +8,7 @@ namespace rvcc {
 class Codegen{
   public:
     explicit Codegen(Ast* ast): ast_(ast) {}
+    Ast*& ast();
     int compute();
     void codegen();
   private:

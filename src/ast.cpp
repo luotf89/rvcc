@@ -4,7 +4,6 @@
 #include "instructions.h"
 #include <cassert>
 #include <fstream>
-#include <functional>
 #include <iostream>
 #include <sstream>
 
@@ -27,6 +26,8 @@ const char* Expr::type_names[static_cast<int>(ExprType::NODE_COUNT)] {
   "NODE_ID",
   "NODE_ASSIGN",
   "NODE_STMT",
+  "NODE_RETURN",
+  "NODE_COMPOUND",
   "Node_ILLEGAL"
 };
 
@@ -66,6 +67,22 @@ Expr::Expr(ExprType type):type_(type) {
   g_id++;
 }
 
+Expr* Expr::getNext() {
+  return nullptr;
+}
+
+Expr* Expr::getLeft() {
+  return nullptr;
+}
+
+Expr* Expr::getRight() {
+  return nullptr;
+}
+
+Expr* Expr::getStmts() {
+  return nullptr;
+}
+
 int& Expr::id() {
   return id_;
 }
@@ -90,10 +107,6 @@ BinaryExpr::BinaryExpr(
   value_ = value;
   left_ = left;
   right_ = right;
-}
-
-Expr* BinaryExpr::getNext() {
-  return nullptr;
 }
 
 Expr* BinaryExpr::getLeft() {
@@ -215,9 +228,9 @@ void BinaryExpr::visualize(std::ostringstream& oss, int&ident_num) {
   ::ident(oss, ident_num);
   oss << id() << " [label=\"Node " << getTypeName() << "\"," << "color=black]\n";
   ::ident(oss, ident_num);
-  oss << id() << " -> " << getLeft()->id() << "[color=black];\n";
+  oss << id() << " -> " << getLeft()->id() << "[label=\"left\", color=black];\n";
   ::ident(oss, ident_num);
-  oss << id() << " -> " << getRight()->id() << "[color=black];\n";
+  oss << id() << " -> " << getRight()->id() << "[label=\"right\", color=black];\n";
 }
 
 Expr*& BinaryExpr::left() {
@@ -240,16 +253,8 @@ UnaryExpr::UnaryExpr(
   left_ = left;
 }
 
-Expr* UnaryExpr::getNext() {
-  return nullptr;
-}
-
 Expr* UnaryExpr::getLeft() {
   return left_;
-}
-
-Expr* UnaryExpr::getRight() {
-  return nullptr;
 }
 
 int UnaryExpr::computer() {
@@ -289,7 +294,7 @@ void UnaryExpr::visualize(std::ostringstream& oss, int& ident_num) {
   ::ident(oss, ident_num);
   oss << id() << " [label=\"Node " << getTypeName() << "\"," << "color=black]\n";
   ::ident(oss, ident_num);
-  oss << id() << " -> " << getLeft()->id() << "[color=black];\n";
+  oss << id() << " -> " << getLeft()->id() << "[label=\"left\", color=black];\n";
 }
 
 Expr*& UnaryExpr::left() {
@@ -299,18 +304,6 @@ Expr*& UnaryExpr::left() {
 NumExpr::NumExpr(int value):
   Expr(ExprType::NODE_NUM) {
   value_ = value;
-}
-
-Expr* NumExpr::getNext() {
-  return nullptr;
-}
-
-Expr* NumExpr::getLeft() {
-  return nullptr;
-}
-
-Expr* NumExpr::getRight() {
-  return nullptr;
 }
 
 int NumExpr::computer() {
@@ -336,16 +329,11 @@ IdentityExpr::IdentityExpr(Var* var):
   var_ = var;
 }
 
-Expr* IdentityExpr::getNext() {
-  return nullptr;
-}
-
-Expr* IdentityExpr::getLeft() {
-  return nullptr;
-}
-
-Expr* IdentityExpr::getRight() {
-  return nullptr;
+IdentityExpr::~IdentityExpr() {
+  if (var_) {
+    delete var_;
+    var_ = nullptr;
+  }
 }
 
 Var*& IdentityExpr::var() {
@@ -375,10 +363,22 @@ void IdentityExpr::visualize(std::ostringstream& oss, int& ident_num) {
   oss << id() << " [label=\"Node " << getTypeName() << ": " << name << "\"," << "color=yellow]\n";
 }
 
-StmtExpr::StmtExpr(Expr* next, Expr* left):
+StmtExpr::StmtExpr(Expr* next, Expr* left, int val):
   Expr(ExprType::NODE_STMT) {
   next_ = next;
   left_ = left;
+  val_ = val;
+  return_flag_ = false;
+}
+
+StmtExpr::~StmtExpr() {
+  assert(!getRight());
+  auto func = [](Expr* curr_node) {
+    delete curr_node;
+  };
+  if (getLeft()){
+    walkImpl<WalkOrderType::POST_ORDER>(func, getLeft());
+  }
 }
 
 Expr* StmtExpr::getNext() {
@@ -389,10 +389,6 @@ Expr* StmtExpr::getLeft() {
   return left_;
 }
 
-Expr* StmtExpr::getRight() {
-  return nullptr;
-}
-
 Expr*& StmtExpr::next() {
   return next_;
 }
@@ -401,21 +397,161 @@ Expr*& StmtExpr::left() {
   return left_;
 }
 
-int StmtExpr::computer() {
-  return 0;
+bool StmtExpr::getReturnFlag() {
+  return return_flag_;
 }
 
-void StmtExpr::codegen() {}
+int StmtExpr::computer() {
+  auto func = [](Expr* curr_node) {
+    curr_node->computer();
+  };
+  if (getLeft()){
+    walkImpl<WalkOrderType::POST_ORDER>(func, getLeft());
+    value() = getLeft()->value();
+    if (getLeft()->type() == ExprType::NODE_RETURN) {
+      return_flag_ = true;
+    }
+  } else {
+    WARNING("current stmt is empty!");
+  }
+  
+  return value();
+}
+
+void StmtExpr::codegen() {
+  auto func = [](Expr* curr_node) {
+    curr_node->codegen();
+  };
+  if (getLeft()) {
+    walkImpl<WalkOrderType::POST_ORDER>(func, getLeft());
+  } else {
+    WARNING("current stmt is empty!");
+  }
+}
 
 int& StmtExpr::value() {
-  return id();
+  return val_;
 }
 
 void StmtExpr::visualize(std::ostringstream& oss, int& ident_num) {
+
   ::ident(oss, ident_num);
   oss << id() << " [label=\"Node " << getTypeName() << "\"," << "color=red]\n";
+  auto func = [&](Expr* curr_node) {
+    curr_node->visualize(oss, ident_num);
+  };
+  if (getLeft()) {
+    walkImpl<WalkOrderType::POST_ORDER>(func, getLeft());
+    ::ident(oss, ident_num);
+    oss << id() << " -> " << getLeft()->id() << "[label=\"left\", color=black];\n";
+  } else {
+    WARNING("current stmt is empty!");
+  }  
+}
+
+CompoundStmtExpr::CompoundStmtExpr(Expr* stmts, Expr* next, int val):
+  Expr(ExprType::NODE_COMPOUND) {
+  stmts_ = stmts;
+  next_ = next;
+  val_ = val;
+}
+
+CompoundStmtExpr::~CompoundStmtExpr() {
+  Expr* curr = stmts();
+  Expr* prev = nullptr;
+  while (curr) {
+    if (prev) {
+      delete prev;
+    }
+    prev = curr;
+    curr = curr->getNext();
+  } 
+}
+
+Expr* CompoundStmtExpr::getNext() {
+  return next_;
+}
+
+Expr* CompoundStmtExpr::getStmts() {
+  return stmts_;
+}
+
+Expr*& CompoundStmtExpr::next() {
+  return next_;
+}
+
+Expr*& CompoundStmtExpr::stmts() {
+  return stmts_;
+}
+
+bool CompoundStmtExpr::getReturnFlag() {
+  return return_flag_;
+}
+
+int CompoundStmtExpr::computer() {
+  if (!stmts()) {
+    WARNING("current compound stmt is empty!");
+    return 0;
+  }
+  Expr* curr = stmts();
+  Expr* prev = nullptr;
+  while (curr) {
+    curr->computer();
+    prev = curr;
+    return_flag_ = dynamic_cast<StmtExpr*>(curr) ? 
+      dynamic_cast<StmtExpr*>(curr)->getReturnFlag():
+      dynamic_cast<CompoundStmtExpr*>(curr)->getReturnFlag();
+    if (return_flag_) {
+      break;
+    }
+    curr = curr->getNext();
+  }
+  if (prev) {
+    value() = prev->value();
+  } else {
+    WARNING("current compound stmt is empty!");
+  }
+  return value();
+}
+
+void CompoundStmtExpr::codegen() {
+  if (!stmts()) {
+    WARNING("current compound stmt is empty!");
+    return;
+  }
+  Expr* curr = stmts();
+  while (curr) {
+    curr->codegen();
+    curr = curr->getNext();
+  }
+}
+
+int& CompoundStmtExpr::value() {
+  return val_;
+}
+
+void CompoundStmtExpr::visualize(std::ostringstream& oss, int& ident_num) {
   ::ident(oss, ident_num);
-  oss << id() << " -> " << getLeft()->id() << "[color=black];\n";
+  oss << id() << " [label=\"Node " << getTypeName() << "\"," << "color=red]\n";
+
+  if (!stmts()) {
+    WARNING("current compound stmt is empty!");
+  } 
+  Expr* curr = stmts();
+  Expr* prev = nullptr;
+  if (curr) {
+    while (curr) {
+      curr->visualize(oss, ident_num);
+      if (prev) {
+        ::ident(oss, ident_num);
+        oss << prev->id() << " -> " << curr->id() << "[label=\"next\", color=black];\n";
+      }
+      prev = curr;
+      curr = curr->getNext();
+    }
+    ::ident(oss, ident_num);
+    oss << id() << " -> " << stmts()->id() << "[label=\"stmt\", color=black];\n";
+  }
 }
 
 Function::Function() {
@@ -434,22 +570,20 @@ std::map<std::size_t, Var*>& Function::var_maps() {
 Function::Function(Expr* body, std::map<std::size_t,
   Var*>&& var_maps):body_(body), var_maps_(std::move(var_maps)) {}
 
-void Function::freeNode(Expr* curr) {
-  if (!curr) {
-    return;
-  }
-  assert(typeid(Expr) == typeid(StmtExpr));
-  if (curr->getNext()) {
-    freeNode(curr->getNext());
-  }
-  walkImpl<WalkOrderType::POST_ORDER>([](Expr* curr_node) {
-    delete curr_node;
-  }, curr->getLeft());
-  delete curr;
-}
 
 Function::~Function() {
-  freeNode(body_);
+  if (body()->getNext()) {
+    WARNING("curr funtion has more than one top compound stmt");
+  }
+  Expr* curr = body();
+  Expr* prev = nullptr;
+  while (curr) {
+    if (prev) {
+      delete prev;
+    }
+    prev = curr;
+    curr = curr->getNext();
+  }
 }
 
 
@@ -462,34 +596,16 @@ void Function::getVarOffsets() {
 }
 
 void Function::visualize(std::ostringstream& oss, int& ident_num) {
-  auto func = [&](Expr* curr_node) {
-    curr_node->visualize(oss, ident_num);
-  };
-  // reverse 遍历 显示的图是反着的
-
-  // auto walkPost = [&](Expr* curr) {
-  //   std::function<void(Expr*)> walkPostImpl;
-  //   walkPostImpl = [&](Expr* curr_node) {
-  //     if (!curr_node) {
-  //       return;
-  //     }
-  //     walkPostImpl(curr_node->getNext());
-  //     assert(curr_node->type() == ExprType::NODE_STMT);
-  //     walkImpl<WalkOrderType::POST_ORDER>(func, curr_node->getLeft());
-  //     curr_node->visualize(oss, ident_num);
-  //     if (curr_node->getNext() != nullptr) {
-  //       ident(oss, ident_num);
-  //       oss << curr_node->id() << " -> " << curr_node->getNext()->id() << "[color=red];\n";
-  //     }
-  //   };
-  //   walkPostImpl(curr);
-  // };
-  // walkPost(body_);
-
+  if (!body()) {
+    WARNING("curr stmt is empty, can't be computed");
+    return;
+  }
+  if (body()->getNext()) {
+    WARNING("curr funtion has more than one top compound stmt");
+  }
   Expr* curr = body();
   Expr* prev = nullptr;
   while(curr) {
-    walkImpl<WalkOrderType::POST_ORDER>(func, curr->getLeft());
     curr->visualize(oss, ident_num);
     if (prev) {
       ident(oss, ident_num);
@@ -501,35 +617,38 @@ void Function::visualize(std::ostringstream& oss, int& ident_num) {
 }
 
 int Function::computer() {
-  auto func = [](Expr* curr_node) {
-    curr_node->computer();
-  };
+  if (!body()) {
+    WARNING("curr stmt is empty, can't be computed");
+    return 0;
+  }
+  if (body()->getNext()) {
+    WARNING("curr funtion has more than one top compound stmt");
+  }
   
   Expr* curr = body();
   Expr* prev = nullptr;
   while(curr) {
-    walkImpl<WalkOrderType::POST_ORDER>(func, curr->getLeft());
+    curr->computer();
     prev = curr;
-    if (curr->getLeft()->type() == ExprType::NODE_RETURN) {
-      break;
-    }
     curr = curr->getNext();
   };
-  if (!prev) {
-    FATAL("curr stmt is empty, can't be computed");
-  }
-  return prev ? prev->getLeft()->value() : 0;
+  return prev->value();
 }
 
 void Function::codegen() {
-  auto func = [](Expr* curr_node) {
-    curr_node->codegen();
-  };
-  Expr* curr = body();
-  while (curr) {
-    walkImpl<WalkOrderType::POST_ORDER>(func, curr->getLeft());
-    curr = curr->getNext();
+  if (!body()) {
+    WARNING("curr stmt is empty, can't be computed");
+    return;
   }
+  if (body()->getNext()) {
+    WARNING("curr funtion has more than one top compound stmt");
+  }
+  
+  Expr* curr = body();
+  while(curr) {
+    curr->codegen();
+    curr = curr->getNext();
+  };
 }
 
 Ast::Ast() {

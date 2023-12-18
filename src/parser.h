@@ -5,8 +5,9 @@
 #include "ast.h"
 #include <cstddef>
 /*
-program = (stmt)+
-stmt = "return" expr ";" | expr ";"
+program = "{" compound_stmt
+compound_stmt = stmt* }
+stmt = "return" expr ";" | expr ";" | "{" compound_stmt
 expr = assign
 assign = equality (= assign)*
 equality =  relation ("==" relation | "!=" relation)*
@@ -26,6 +27,7 @@ namespace rvcc {
       static Expr* unaryOp(Expr* left, ExprType type);
     private:
       Expr* parser_program();
+      Expr* parser_compound_stmt();
       Expr* parser_stmt();
       Expr* parser_expr();
       Expr* parser_assign();

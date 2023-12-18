@@ -18,8 +18,8 @@ int main(int argc, char** argv) {
   Ast* ast = parser.parser_ast();
   ast->visualization("graph.dot");
   Codegen* codegen = new Codegen(ast);
-  std::cerr << codegen->compute() << std::endl;
-  // codegen->codegen();
+  // std::cerr << codegen->compute() << std::endl;
+  codegen->codegen();
 
   return 0;
 }
