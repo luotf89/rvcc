@@ -1,8 +1,16 @@
 #include "lexer.h"
+#include "token.h"
 #include <cctype>
 #include <cstdlib>
 
 using namespace rvcc;
+
+const char* keywords[] {
+  "return",
+  "if",
+  "else",
+  nullptr
+};
 
 Token Lexer::getNextToken() {
   Token new_token;
@@ -23,9 +31,14 @@ Token Lexer::getNextToken() {
       }
       new_token.getType() = TokenType::TOKEN_ID;
       new_token.getLen() = curr_pos_ - new_token.getLoc();
-      if (startWith(new_token.getLoc(), "return") && 
-          new_token.getLen() == strlen("return")) {
-        new_token.getType() = TokenType::TOKEN_KEYWORD;
+      int i = 0;
+      while(keywords[i] != nullptr) {
+        if (startWith(new_token.getLoc(), keywords[i]) && 
+            new_token.getLen() == static_cast<int>(strlen(keywords[i]))) {
+          new_token.getType() = TokenType::TOKEN_KEYWORD;
+          break;
+        }
+        i++;
       }
     } else if (new_token.getLen() = readPunct(curr_pos_),
                new_token.getLen()) {

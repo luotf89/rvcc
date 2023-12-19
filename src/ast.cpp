@@ -3,6 +3,7 @@
 #include "utils.h"
 #include "instructions.h"
 #include <cassert>
+#include <cstdint>
 #include <fstream>
 #include <iostream>
 #include <sstream>
@@ -28,6 +29,7 @@ const char* Expr::type_names[static_cast<int>(ExprType::NODE_COUNT)] {
   "NODE_STMT",
   "NODE_RETURN",
   "NODE_COMPOUND",
+  "NODE_IF",
   "Node_ILLEGAL"
 };
 
@@ -83,6 +85,18 @@ Expr* Expr::getStmts() {
   return nullptr;
 }
 
+Expr* Expr::getCond() {
+  return nullptr;
+}
+
+Expr* Expr::getThen() {
+  return nullptr;
+}
+
+Expr* Expr::getEls() {
+  return nullptr;
+}
+
 int& Expr::id() {
   return id_;
 }
@@ -95,18 +109,28 @@ const char* Expr::getTypeName() const {
   return type_names[static_cast<int>(type_)];
 }
 
-BinaryExpr::BinaryExpr():Expr() {
-  value_ = 0;
-  left_ = nullptr;
-  right_ = nullptr;
+NextExpr::NextExpr(ExprType type, Expr* next):Expr(type), next_(next) {
+  return_flag_ = false;
 }
 
-BinaryExpr::BinaryExpr(
-  ExprType type, int value, 
-  Expr* left, Expr* right): Expr(type) {
-  value_ = value;
-  left_ = left;
-  right_ = right;
+Expr* NextExpr::getNext() {
+  return next_;
+}
+
+Expr*& NextExpr::next() {
+  return next_;
+}
+
+bool NextExpr::getReturnFlag() {
+  return return_flag_;
+}
+bool& NextExpr::returnFlag() {
+  return return_flag_;
+}
+
+BinaryExpr::BinaryExpr(ExprType type, Expr* left, Expr* right):
+  Expr(type), left_(left), right_(right) {
+  value_ = 0;
 }
 
 Expr* BinaryExpr::getLeft() {
@@ -246,11 +270,8 @@ UnaryExpr::UnaryExpr():Expr() {
   left_ = nullptr;
 }
 
-UnaryExpr::UnaryExpr(
-  ExprType type, int value, 
-  Expr* left): Expr(type) {
-  value_ = value;
-  left_ = left;
+UnaryExpr::UnaryExpr(ExprType type, Expr* left): Expr(type), left_(left) {
+  value_ = 0;
 }
 
 Expr* UnaryExpr::getLeft() {
@@ -279,7 +300,7 @@ void UnaryExpr::codegen() {
     push_("a0");
     break;
   case ExprType::NODE_RETURN:
-    goto_return_lable_();
+    goto_return_label_();
     break;
   default:
     ERROR("unary expr cant support current type: %s", getTypeName());
@@ -363,12 +384,10 @@ void IdentityExpr::visualize(std::ostringstream& oss, int& ident_num) {
   oss << id() << " [label=\"Node " << getTypeName() << ": " << name << "\"," << "color=yellow]\n";
 }
 
-StmtExpr::StmtExpr(Expr* next, Expr* left, int val):
-  Expr(ExprType::NODE_STMT) {
-  next_ = next;
+StmtExpr::StmtExpr(Expr* next, Expr* left):
+  NextExpr(ExprType::NODE_STMT) {
   left_ = left;
-  val_ = val;
-  return_flag_ = false;
+  value_ = 0;
 }
 
 StmtExpr::~StmtExpr() {
@@ -381,24 +400,12 @@ StmtExpr::~StmtExpr() {
   }
 }
 
-Expr* StmtExpr::getNext() {
-  return next_;
-}
-
 Expr* StmtExpr::getLeft() {
   return left_;
 }
 
-Expr*& StmtExpr::next() {
-  return next_;
-}
-
 Expr*& StmtExpr::left() {
   return left_;
-}
-
-bool StmtExpr::getReturnFlag() {
-  return return_flag_;
 }
 
 int StmtExpr::computer() {
@@ -409,7 +416,7 @@ int StmtExpr::computer() {
     walkImpl<WalkOrderType::POST_ORDER>(func, getLeft());
     value() = getLeft()->value();
     if (getLeft()->type() == ExprType::NODE_RETURN) {
-      return_flag_ = true;
+      returnFlag() = true;
     }
   } else {
     WARNING("current stmt is empty!");
@@ -430,7 +437,7 @@ void StmtExpr::codegen() {
 }
 
 int& StmtExpr::value() {
-  return val_;
+  return value_;
 }
 
 void StmtExpr::visualize(std::ostringstream& oss, int& ident_num) {
@@ -449,43 +456,29 @@ void StmtExpr::visualize(std::ostringstream& oss, int& ident_num) {
   }  
 }
 
-CompoundStmtExpr::CompoundStmtExpr(Expr* stmts, Expr* next, int val):
-  Expr(ExprType::NODE_COMPOUND) {
-  stmts_ = stmts;
-  next_ = next;
-  val_ = val;
+CompoundStmtExpr::CompoundStmtExpr(NextExpr* stmts):
+  NextExpr(ExprType::NODE_COMPOUND), stmts_(stmts) {
+  value_ = 0;
 }
 
 CompoundStmtExpr::~CompoundStmtExpr() {
-  Expr* curr = stmts();
-  Expr* prev = nullptr;
+  NextExpr* curr = stmts();
+  NextExpr* prev = nullptr;
   while (curr) {
     if (prev) {
       delete prev;
     }
     prev = curr;
-    curr = curr->getNext();
+    curr = dynamic_cast<NextExpr*>(curr->getNext());
   } 
-}
-
-Expr* CompoundStmtExpr::getNext() {
-  return next_;
 }
 
 Expr* CompoundStmtExpr::getStmts() {
   return stmts_;
 }
 
-Expr*& CompoundStmtExpr::next() {
-  return next_;
-}
-
-Expr*& CompoundStmtExpr::stmts() {
+NextExpr*& CompoundStmtExpr::stmts() {
   return stmts_;
-}
-
-bool CompoundStmtExpr::getReturnFlag() {
-  return return_flag_;
 }
 
 int CompoundStmtExpr::computer() {
@@ -493,18 +486,16 @@ int CompoundStmtExpr::computer() {
     WARNING("current compound stmt is empty!");
     return 0;
   }
-  Expr* curr = stmts();
-  Expr* prev = nullptr;
+  NextExpr* curr = stmts();
+  NextExpr* prev = nullptr;
   while (curr) {
     curr->computer();
     prev = curr;
-    return_flag_ = dynamic_cast<StmtExpr*>(curr) ? 
-      dynamic_cast<StmtExpr*>(curr)->getReturnFlag():
-      dynamic_cast<CompoundStmtExpr*>(curr)->getReturnFlag();
-    if (return_flag_) {
+    returnFlag() = curr->getReturnFlag();
+    if (getReturnFlag()) {
       break;
     }
-    curr = curr->getNext();
+    curr = dynamic_cast<NextExpr*>(curr->getNext());
   }
   if (prev) {
     value() = prev->value();
@@ -527,7 +518,7 @@ void CompoundStmtExpr::codegen() {
 }
 
 int& CompoundStmtExpr::value() {
-  return val_;
+  return value_;
 }
 
 void CompoundStmtExpr::visualize(std::ostringstream& oss, int& ident_num) {
@@ -551,6 +542,97 @@ void CompoundStmtExpr::visualize(std::ostringstream& oss, int& ident_num) {
     }
     ::ident(oss, ident_num);
     oss << id() << " -> " << stmts()->id() << "[label=\"stmt\", color=black];\n";
+  }
+}
+
+IfExpr::IfExpr(Expr* cond, Expr* then, Expr* els):
+  NextExpr(ExprType::NODE_IF), cond_(cond), then_(then), els_(els) {
+  value_ = 0;
+}
+
+IfExpr::~IfExpr() {
+  delete cond_;
+  delete then_;
+  delete els_;
+}
+
+Expr* IfExpr::getCond() {
+  return cond_;
+}
+
+Expr* IfExpr::getThen() {
+  return then_;
+}
+
+Expr* IfExpr::getEls() {
+  return els_;
+}
+
+int& IfExpr::value() {
+  return value_;
+}
+
+Expr*& IfExpr::cond() {
+  return cond_;
+}
+
+Expr*& IfExpr::then() {
+  return then_;
+}
+
+Expr*& IfExpr::els() {
+  return els_;
+}
+
+int IfExpr::computer() {
+  if (getCond()->computer()) {
+    if (!getThen()) {
+      FATAL("if stmt's then is nullptr");
+    }
+    value() = getThen()->computer();
+    returnFlag() = dynamic_cast<NextExpr*>(getThen()) ->getReturnFlag();
+  } else if (!(getCond()->computer()) && getEls()) {
+    value() = getEls()->computer();
+    returnFlag() = dynamic_cast<NextExpr*>(getEls()) ->getReturnFlag();
+  }
+  return value();
+}
+
+void IfExpr::codegen() {
+  cond()->codegen();
+  pop_("a0");
+  std::uint32_t unique_id = uniqueId();
+  goto_else_label_("a0", unique_id);
+  getThen()->codegen();
+  else_label_(unique_id);
+  if (getEls()) {
+    getEls()->codegen();
+  }
+  end_label_(unique_id);
+}
+
+
+void IfExpr::visualize(std::ostringstream& oss, int& ident_num) {
+  ::ident(oss, ident_num);
+  oss << id() << " [label=\"Node " << getTypeName() << "\"," << "color=red]\n";
+  if (getCond()) {
+    getCond()->visualize(oss, ident_num);
+    ::ident(oss, ident_num);
+    oss << id() << " -> " << cond()->id() << "[label=\"cond\", color=black];\n";
+  } else {
+    FATAL("if stmt's cond is nullptr");
+  }
+  if (getThen()) {
+    getThen()->visualize(oss, ident_num);
+    ::ident(oss, ident_num);
+    oss << id() << " -> " << then()->id() << "[label=\"then\", color=black];\n";
+  } else {
+    FATAL("if stmt's then is nullptr");
+  }
+  if (getEls()) {
+    getEls()->visualize(oss, ident_num);
+    ::ident(oss, ident_num);
+    oss << id() << " -> " << then()->id() << "[label=\"else\", color=black];\n";
   }
 }
 

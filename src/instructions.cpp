@@ -66,10 +66,22 @@ void start_() {
     printf("main:\n");
 };
 
-void goto_return_lable_() {
+void goto_return_label_() {
     printf("  j .L.return\n");
 }
 
-void return_lable_() {
+void return_label_() {
     printf(".L.return:\n");
+}
+
+void goto_else_label_(const char* reg, std::uint32_t unique_id) {
+    printf("  beqz %s, .L.else.%d\n", reg, unique_id);
+}
+
+void else_label_(std::uint32_t unique_id) {
+    printf(".L.else.%d:\n", unique_id);
+}
+
+void end_label_(std::uint32_t unique_id) {
+    printf(".L.end.%d:\n", unique_id);
 }

@@ -11,11 +11,11 @@
 using namespace rvcc;
 
 Expr* Parser::binaryOp(Expr* left, Expr*right, ExprType type) {
-  return new BinaryExpr(type, 0, left, right);
+  return new BinaryExpr(type, left, right);
 }
 
 Expr* Parser::unaryOp(Expr*left, ExprType type) {
-  return new UnaryExpr(type, 0, left);
+  return new UnaryExpr(type, left);
 }
 
 void Parser::init() {
@@ -33,27 +33,21 @@ Expr* Parser::parser_program() {
 
 Expr* Parser::parser_compound_stmt() {
   CompoundStmtExpr* compound_stmt = new CompoundStmtExpr();
-  StmtExpr* head = new StmtExpr();
-  Expr* curr_stmt = head; 
+  NextExpr* head = new StmtExpr();
+  NextExpr* curr_stmt = head; 
   while(!((lexer_.getCurrToken().getType() == TokenType::TOKEN_PUNCT &&
           *(lexer_.getCurrToken().getLoc()) == '}' &&
           lexer_.getCurrToken().getLen() == 1)  ||
           (lexer_.getCurrToken().getType() == TokenType::TOKEN_EOF))) {
-    if (curr_stmt->type() == ExprType::NODE_STMT) {
-      dynamic_cast<StmtExpr*>(curr_stmt)->next() = parser_stmt();
-    } else if (curr_stmt->type() == ExprType::NODE_COMPOUND) {
-      dynamic_cast<CompoundStmtExpr*>(curr_stmt)->next() = parser_stmt();
-    } else {
-      FATAL("expect curr node is stmt or compound stmt but got %s", curr_stmt->getTypeName());
-    }
-    curr_stmt = curr_stmt->getNext();
+    curr_stmt->next() = parser_stmt();
+    curr_stmt = dynamic_cast<NextExpr*>(curr_stmt->getNext());
   }
   if (lexer_.getCurrToken().getType() == TokenType::TOKEN_EOF) {
     int pos = lexer_.getCurrToken().getLoc() - lexer_.getBuf() + 1;
     FATAL("parser compound stmt failed  expect current token is '}'\n %s\n%*s", lexer_.getBuf(), pos, "^");
   }
   lexer_.consumerToken();
-  compound_stmt->stmts() = head->getNext();
+  compound_stmt->stmts() = dynamic_cast<NextExpr*>(head->getNext());
   head->next() = nullptr;
   delete head;
   return compound_stmt;
@@ -72,7 +66,8 @@ Expr* Parser::parser_stmt() {
   Expr* stmt;
   
   if (lexer_.getCurrToken().getType() == TokenType::TOKEN_KEYWORD &&
-      Lexer::startWith(lexer_.getCurrToken().getLoc(), "return")) {
+      Lexer::startWith(lexer_.getCurrToken().getLoc(), "return") &&
+      lexer_.getCurrToken().getLen() == strlen("return")) {
     lexer_.consumerToken();
     stmt =  new StmtExpr;
     stmt->type() = ExprType::NODE_STMT;
@@ -83,6 +78,37 @@ Expr* Parser::parser_stmt() {
              lexer_.getCurrToken().getLen() == 1) {
     lexer_.consumerToken();
     stmt = parser_compound_stmt();
+  } else if (lexer_.getCurrToken().getType() == TokenType::TOKEN_KEYWORD &&
+             Lexer::startWith(lexer_.getCurrToken().getLoc(), "if") &&
+             lexer_.getCurrToken().getLen() == strlen("if")) {
+    lexer_.consumerToken();
+    IfExpr* if_stmt = new IfExpr();
+    if (lexer_.getCurrToken().getType() == TokenType::TOKEN_PUNCT &&
+        *(lexer_.getCurrToken().getLoc()) == '(' &&
+        lexer_.getCurrToken().getLen() == 1) {
+      lexer_.consumerToken();
+      if_stmt->cond() = parser_expr();
+      if (!(lexer_.getCurrToken().getType() == TokenType::TOKEN_PUNCT &&
+            *(lexer_.getCurrToken().getLoc()) == ')' &&
+            lexer_.getCurrToken().getLen() == 1)) {
+        delete if_stmt;
+        int pos = lexer_.getCurrToken().getLoc() - lexer_.getBuf() + 1;
+        FATAL("parser if stmt failed  expect current token is ')'\n %s\n%*s", lexer_.getBuf(), pos, "^");
+      }
+      lexer_.consumerToken();
+      if_stmt->then() = parser_stmt();
+      if (lexer_.getCurrToken().getType() == TokenType::TOKEN_KEYWORD &&
+          Lexer::startWith(lexer_.getCurrToken().getLoc(), "else") &&
+          lexer_.getCurrToken().getLen() == strlen("else")) {
+        lexer_.consumerToken();
+        if_stmt->els() = parser_stmt();
+      }
+    } else {
+      delete if_stmt;
+      int pos = lexer_.getCurrToken().getLoc() - lexer_.getBuf() + 1;
+      FATAL("parser if stmt failed  expect current token is '('\n %s\n%*s", lexer_.getBuf(), pos, "^");
+    }
+    stmt = if_stmt;
   } else {
     if (lexer_.getCurrToken().getType() == TokenType::TOKEN_PUNCT &&
         *(lexer_.getCurrToken().getLoc()) == ';' &&

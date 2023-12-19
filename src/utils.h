@@ -7,7 +7,7 @@
 
 std::size_t getstrHash(const char* str, int len);
 void ident(std::ostringstream& oss, int& ident_num);
-
+uint32_t uniqueId();
 
 
 

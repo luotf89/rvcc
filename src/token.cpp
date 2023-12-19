@@ -2,6 +2,7 @@
 
 using namespace rvcc;
 
+
 const char* Token::type_names[static_cast<int>(TokenType::TOKEN_COUNT)] {
   "TOKEN_ID",
   "TOKEN_EOF",

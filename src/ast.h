@@ -29,7 +29,8 @@ enum class ExprType:int{
   NODE_ASSIGN,          // =
   NODE_STMT,
   NODE_RETURN,
-  NODE_COMPOUND,         
+  NODE_COMPOUND,
+  NODE_IF,         
   NODE_ILLEGAL,         // illegal
   NODE_COUNT
 };
@@ -54,10 +55,13 @@ class Expr {
     explicit Expr(ExprType type);
     Expr();
     virtual ~Expr() {}
-    virtual Expr* getNext();
-    virtual Expr* getLeft();
+    virtual Expr* getNext();     // 方便调试
+    virtual Expr* getLeft();     // 方便调试
     virtual Expr* getRight();
-    virtual Expr* getStmts();
+    virtual Expr* getStmts();    // 方便调试
+    virtual Expr* getCond();
+    virtual Expr* getThen();
+    virtual Expr* getEls();
     virtual int computer() = 0;
     virtual void codegen() = 0;
     virtual int& value() = 0;
@@ -97,12 +101,26 @@ class Expr {
     static const char* type_names[static_cast<int>(ExprType::NODE_COUNT)];
 
 };
+/*
+NextExpr 作为 stmt的基类， 提供next方法，和return flag 方法
+stmt的种类包括 单语句 复合语句 if-else for call 等等
+*/
+class NextExpr : public Expr {
+  public:
+    NextExpr(ExprType type, Expr* next=nullptr);
+    Expr * getNext() override;
+    Expr*& next();
+    bool getReturnFlag();
+    bool& returnFlag();
+  private:
+    Expr* next_;
+    bool return_flag_;
+};
 
 class BinaryExpr: public Expr {
   public:
-    BinaryExpr();
-    BinaryExpr(ExprType type, int value=0,
-      Expr* left=nullptr, Expr* right=nullptr);
+    BinaryExpr(ExprType type, Expr* left=nullptr,
+               Expr* right=nullptr);
     virtual Expr* getLeft() override;
     virtual Expr* getRight() override;
     virtual int computer() override;
@@ -120,7 +138,7 @@ class BinaryExpr: public Expr {
 class UnaryExpr: public Expr {
   public:
     UnaryExpr();
-    UnaryExpr(ExprType type, int value=0, Expr* left=nullptr);
+    UnaryExpr(ExprType type, Expr* left=nullptr);
     virtual Expr* getLeft() override;
     virtual int computer() override;
     virtual void codegen() override;
@@ -145,7 +163,7 @@ class NumExpr: public Expr {
 
 class IdentityExpr: public Expr {
   public:
-    IdentityExpr(Var* var=0);
+    IdentityExpr(Var* var=nullptr);
     ~IdentityExpr();
     virtual int computer() override;
     virtual void codegen() override;
@@ -156,44 +174,55 @@ class IdentityExpr: public Expr {
     Var* var_;
 };
 
-class StmtExpr: public Expr {
+class StmtExpr: public NextExpr {
   public:
-    StmtExpr(Expr* next=nullptr, Expr* left=nullptr, int val=0);
+    StmtExpr(Expr* next=nullptr, Expr* left=nullptr);
     ~StmtExpr();
-    virtual Expr* getNext() override;
     virtual Expr* getLeft() override;
     virtual int computer() override;
     virtual void codegen() override;
     virtual int& value() override; // stmt value is id
     virtual void visualize(std::ostringstream& oss, int& ident_num) override;
-    Expr*& next();
     Expr*& left();
-    bool getReturnFlag();
   private:
-    Expr* next_;
     Expr* left_;
-    int val_;
-    bool return_flag_;
+    int value_;
 };
 
-class CompoundStmtExpr: public Expr {
+class CompoundStmtExpr: public NextExpr {
   public:
-    CompoundStmtExpr(Expr* stmts=nullptr, Expr* next=nullptr, int val=0);
+    CompoundStmtExpr(NextExpr* stmts=nullptr);
     ~CompoundStmtExpr();
-    virtual Expr* getNext() override;
     virtual Expr* getStmts() override;
     virtual int computer() override;
     virtual void codegen() override;
     virtual int& value() override; // stmt value is id
     virtual void visualize(std::ostringstream& oss, int& ident_num) override;
-    Expr*& next();
-    Expr*& stmts();
-    bool getReturnFlag();
+    NextExpr*& stmts();
   private:
-    Expr* stmts_;
-    Expr* next_;
-    int val_;
-    bool return_flag_;
+    NextExpr* stmts_;
+    int value_;
+};
+
+class IfExpr: public NextExpr {
+  public:
+    IfExpr(Expr* cond=nullptr, Expr* then=nullptr, Expr* els=nullptr);
+    ~IfExpr();
+    virtual Expr* getCond() override;
+    virtual Expr* getThen() override;
+    virtual Expr* getEls() override;
+    virtual int computer() override;
+    virtual void codegen() override;
+    virtual int& value() override; // stmt value is id
+    virtual void visualize(std::ostringstream& oss, int& ident_num) override;
+    Expr*& cond();
+    Expr*& then();
+    Expr*& els();
+  private:
+    Expr* cond_;
+    Expr* then_;
+    Expr* els_;
+    int value_;
 };
 
 

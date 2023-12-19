@@ -1,5 +1,6 @@
 #ifndef __INSTRUCTION_H
 #define __INSTRUCTION_H
+#include <cstdint>
 #include <stdio.h>
 
 void mv_(const char* dst, const char* src);
@@ -22,7 +23,11 @@ void ret_();
 void push_(const char* reg);
 void pop_(const char* reg);
 void start_();
-void goto_return_lable_();
-void return_lable_();
+void goto_return_label_();
+void return_label_();
+
+void goto_else_label_(const char* reg, std::uint32_t unique_id);
+void else_label_(std::uint32_t unique_id);
+void end_label_(std::uint32_t unique_id);
 
 #endif
