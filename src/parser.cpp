@@ -1,7 +1,6 @@
 #include "parser.h"
 #include "ast.h"
 #include "lexer.h"
-#include "logger.h"
 #include "utils.h"
 #include "token.h"
 #include <cassert>
@@ -23,9 +22,7 @@ void Parser::init() {
 }
 
 Expr* Parser::parser_program() {
-  assert(lexer_.getCurrToken().getType() == TokenType::TOKEN_PUNCT &&
-         *(lexer_.getCurrToken().getLoc()) == '{' &&
-         lexer_.getCurrToken().getLen() == 1);
+  rvcc::startWithStr("{", "program", lexer_);
   lexer_.consumerToken();
   Expr* program = parser_compound_stmt();
   return program;
@@ -35,17 +32,13 @@ Expr* Parser::parser_compound_stmt() {
   CompoundStmtExpr* compound_stmt = new CompoundStmtExpr();
   NextExpr* head = new StmtExpr();
   NextExpr* curr_stmt = head; 
-  while(!((lexer_.getCurrToken().getType() == TokenType::TOKEN_PUNCT &&
-          *(lexer_.getCurrToken().getLoc()) == '}' &&
-          lexer_.getCurrToken().getLen() == 1)  ||
-          (lexer_.getCurrToken().getType() == TokenType::TOKEN_EOF))) {
+  while(!(startWithStr("}", lexer_) ||
+          lexer_.getCurrToken().getType() == TokenType::TOKEN_ILLEGAL ||
+          lexer_.getCurrToken().getType() == TokenType::TOKEN_EOF)) {
     curr_stmt->next() = parser_stmt();
     curr_stmt = dynamic_cast<NextExpr*>(curr_stmt->getNext());
   }
-  if (lexer_.getCurrToken().getType() == TokenType::TOKEN_EOF) {
-    int pos = lexer_.getCurrToken().getLoc() - lexer_.getBuf() + 1;
-    FATAL("parser compound stmt failed  expect current token is '}'\n %s\n%*s", lexer_.getBuf(), pos, "^");
-  }
+  startWithStr("}", compound_stmt, lexer_);
   lexer_.consumerToken();
   compound_stmt->stmts() = dynamic_cast<NextExpr*>(head->getNext());
   head->next() = nullptr;
@@ -54,65 +47,59 @@ Expr* Parser::parser_compound_stmt() {
 }
 
 Expr* Parser::parser_stmt() {
-  auto endWithComma = [&]() {
-    if (!(lexer_.getCurrToken().getType() == TokenType::TOKEN_PUNCT &&
-        *(lexer_.getCurrToken().getLoc()) == ';' &&
-        lexer_.getCurrToken().getLen() == 1)) {
-      int pos = lexer_.getCurrToken().getLoc() - lexer_.getBuf() + 1;
-      FATAL("parser stmt failed  expect current token is ';'\n %s\n%*s", lexer_.getBuf(), pos, "^");
-    }
-    lexer_.consumerToken();
-  };
   Expr* stmt;
   
-  if (lexer_.getCurrToken().getType() == TokenType::TOKEN_KEYWORD &&
-      Lexer::startWith(lexer_.getCurrToken().getLoc(), "return") &&
-      lexer_.getCurrToken().getLen() == strlen("return")) {
+  if (startWithStr("return", lexer_)) {
     lexer_.consumerToken();
     stmt =  new StmtExpr;
-    stmt->type() = ExprType::NODE_STMT;
-    dynamic_cast<StmtExpr*>(stmt)->left() = unaryOp(parser_expr(), ExprType::NODE_RETURN);
-    endWithComma();
-  } else if (lexer_.getCurrToken().getType() == TokenType::TOKEN_PUNCT &&
-             *(lexer_.getCurrToken().getLoc()) == '{' &&
-             lexer_.getCurrToken().getLen() == 1) {
+    dynamic_cast<StmtExpr*>(stmt)->left() =
+      unaryOp(parser_expr(), ExprType::NODE_RETURN);
+    startWithStr(";", stmt, lexer_);
+    lexer_.consumerToken();
+  } else if (startWithStr("{", lexer_)) {
     lexer_.consumerToken();
     stmt = parser_compound_stmt();
-  } else if (lexer_.getCurrToken().getType() == TokenType::TOKEN_KEYWORD &&
-             Lexer::startWith(lexer_.getCurrToken().getLoc(), "if") &&
-             lexer_.getCurrToken().getLen() == strlen("if")) {
+  } else if (startWithStr("if", lexer_)) {
     lexer_.consumerToken();
     IfExpr* if_stmt = new IfExpr();
-    if (lexer_.getCurrToken().getType() == TokenType::TOKEN_PUNCT &&
-        *(lexer_.getCurrToken().getLoc()) == '(' &&
-        lexer_.getCurrToken().getLen() == 1) {
+    if (startWithStr("(", if_stmt, lexer_)) {
       lexer_.consumerToken();
       if_stmt->cond() = parser_expr();
-      if (!(lexer_.getCurrToken().getType() == TokenType::TOKEN_PUNCT &&
-            *(lexer_.getCurrToken().getLoc()) == ')' &&
-            lexer_.getCurrToken().getLen() == 1)) {
-        delete if_stmt;
-        int pos = lexer_.getCurrToken().getLoc() - lexer_.getBuf() + 1;
-        FATAL("parser if stmt failed  expect current token is ')'\n %s\n%*s", lexer_.getBuf(), pos, "^");
-      }
+      startWithStr(")", if_stmt, lexer_);
       lexer_.consumerToken();
       if_stmt->then() = parser_stmt();
-      if (lexer_.getCurrToken().getType() == TokenType::TOKEN_KEYWORD &&
-          Lexer::startWith(lexer_.getCurrToken().getLoc(), "else") &&
-          lexer_.getCurrToken().getLen() == strlen("else")) {
+      if (startWithStr("else", lexer_)) {
         lexer_.consumerToken();
         if_stmt->els() = parser_stmt();
       }
-    } else {
-      delete if_stmt;
-      int pos = lexer_.getCurrToken().getLoc() - lexer_.getBuf() + 1;
-      FATAL("parser if stmt failed  expect current token is '('\n %s\n%*s", lexer_.getBuf(), pos, "^");
     }
     stmt = if_stmt;
+  } else if (startWithStr("for", lexer_)) {
+    lexer_.consumerToken();
+    ForExpr* for_stmt = new ForExpr();
+    if (startWithStr("(", for_stmt, lexer_)) {
+      lexer_.consumerToken();
+      if (!startWithStr(";", lexer_)) {
+        for_stmt->init() = parser_expr();
+      }
+      startWithStr(";", for_stmt, lexer_);
+      lexer_.consumerToken();
+      if (!startWithStr(";", lexer_)) {
+        for_stmt->cond() = parser_expr();
+      }
+      startWithStr(";", for_stmt, lexer_);
+      lexer_.consumerToken();
+      if (!startWithStr(")", lexer_)) {
+        for_stmt->inc() = parser_expr();
+      }
+      startWithStr(")", for_stmt, lexer_);
+      lexer_.consumerToken();
+      for_stmt->stmts() = dynamic_cast<NextExpr*>(parser_stmt());
+    }
+    stmt = for_stmt;
   } else {
-    if (lexer_.getCurrToken().getType() == TokenType::TOKEN_PUNCT &&
-        *(lexer_.getCurrToken().getLoc()) == ';' &&
-        lexer_.getCurrToken().getLen() == 1) {
+    // 空语句的处理逻辑 ;;
+    if (startWithStr(";", lexer_)) {
       lexer_.consumerToken();
       stmt = new CompoundStmtExpr;
       return stmt;
@@ -120,7 +107,8 @@ Expr* Parser::parser_stmt() {
     stmt =  new StmtExpr;
     stmt->type() = ExprType::NODE_STMT;
     dynamic_cast<StmtExpr*>(stmt)->left() = parser_expr();
-    endWithComma();
+    startWithStr(";", stmt, lexer_);
+    lexer_.consumerToken();
   }
   return stmt;
 }
@@ -132,9 +120,7 @@ Expr* Parser::parser_expr() {
 
 Expr* Parser::parser_assign() {
   Expr* expr = parser_equality();
-  while(lexer_.getCurrToken().getLen() == 1 &&
-        lexer_.getCurrToken().getType() == TokenType::TOKEN_PUNCT &&
-        *(lexer_.getCurrToken().getLoc()) == '=' ) {
+  while(startWithStr("=", lexer_) ) {
     lexer_.consumerToken();
     expr = binaryOp(expr, parser_assign(), ExprType::NODE_ASSIGN);
   }
@@ -143,9 +129,8 @@ Expr* Parser::parser_assign() {
 
 Expr* Parser::parser_equality() {
   Expr* expr = parser_relation();
-  while(lexer_.getCurrToken().getLen() == 2 &&
-        (Lexer::startWith(lexer_.getCurrToken().getLoc(), "==")  || 
-         Lexer::startWith(lexer_.getCurrToken().getLoc(), "!="))) {
+  while(startWithStr("==", lexer_) ||
+        startWithStr("!=", lexer_)) {
     const char* curr_punct = lexer_.getCurrToken().getLoc();
     lexer_.consumerToken();
     if (Lexer::startWith(curr_punct, "==")) {
@@ -159,12 +144,10 @@ Expr* Parser::parser_equality() {
 
 Expr* Parser::parser_relation() {
   Expr* expr = parser_add();
-  while((lexer_.getCurrToken().getLen() == 2 && 
-         (Lexer::startWith(lexer_.getCurrToken().getLoc(), "<=") ||
-          Lexer::startWith(lexer_.getCurrToken().getLoc(), ">="))) ||
-        (lexer_.getCurrToken().getLen() == 1 && 
-         (Lexer::startWith(lexer_.getCurrToken().getLoc(), "<") ||
-          Lexer::startWith(lexer_.getCurrToken().getLoc(), ">")))) {
+  while(startWithStr("<=", lexer_) ||
+        startWithStr(">=", lexer_) ||
+        startWithStr("<", lexer_) ||
+        startWithStr(">", lexer_)) {
     const char* curr_punct = lexer_.getCurrToken().getLoc();
     int curr_len = lexer_.getCurrToken().getLen();
     lexer_.consumerToken();
@@ -187,8 +170,8 @@ Expr* Parser::parser_relation() {
 
 Expr* Parser::parser_add() {
   Expr* expr = parser_mul();
-  while(*(lexer_.getCurrToken().getLoc()) == '+' || 
-        *(lexer_.getCurrToken().getLoc()) == '-') {
+  while(startWithStr("+", lexer_) || 
+        startWithStr("-", lexer_)) {
     char punct = *(lexer_.getCurrToken().getLoc());
     lexer_.consumerToken();
     if (punct == '+') {
@@ -202,8 +185,8 @@ Expr* Parser::parser_add() {
 
 Expr* Parser::parser_mul() {
   Expr* expr = parser_unary();
-  while(*(lexer_.getCurrToken().getLoc()) == '*' || 
-        *(lexer_.getCurrToken().getLoc()) == '/') {
+  while(startWithStr("*", lexer_) || 
+        startWithStr("/", lexer_)) {
     char punct = *(lexer_.getCurrToken().getLoc());
     lexer_.consumerToken();
     if (punct == '*') {
@@ -217,8 +200,8 @@ Expr* Parser::parser_mul() {
 
 Expr* Parser::parser_unary() {
   Expr* expr;
-  if (*(lexer_.getCurrToken().getLoc()) == '+' || 
-        *(lexer_.getCurrToken().getLoc()) == '-') {
+  if (startWithStr("+", lexer_) || 
+      startWithStr("-", lexer_)) {
     char punct = *(lexer_.getCurrToken().getLoc());
     lexer_.consumerToken();
     if (punct == '+') {

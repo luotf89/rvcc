@@ -1,6 +1,6 @@
 #include "token.h"
 
-using namespace rvcc;
+namespace rvcc {
 
 
 const char* Token::type_names[static_cast<int>(TokenType::TOKEN_COUNT)] {
@@ -24,3 +24,5 @@ Token::Token(TokenType type, int val, char* loc, int len):
 const char* Token::getTypeName() const {
   return type_names[static_cast<int>(type_)];
 }
+
+} // end namespace rvcc

@@ -29,5 +29,9 @@ void return_label_();
 void goto_else_label_(const char* reg, std::uint32_t unique_id);
 void else_label_(std::uint32_t unique_id);
 void end_label_(std::uint32_t unique_id);
+void goto_end_label_(std::uint32_t unique_id);
+void loop_begin_label_(std::uint32_t unique_id);
+void goto_loop_begin_label_(std::uint32_t unique_id);
+void goto_loop_end_label_(const char* reg, std::uint32_t unique_id);
 
 #endif

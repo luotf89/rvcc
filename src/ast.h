@@ -2,6 +2,8 @@
 #define __AST_H
 
 
+#include "lexer.h"
+#include "token.h"
 #include <atomic>
 #include <cassert>
 #include <cstddef>
@@ -30,7 +32,8 @@ enum class ExprType:int{
   NODE_STMT,
   NODE_RETURN,
   NODE_COMPOUND,
-  NODE_IF,         
+  NODE_IF,
+  NODE_FOR,       
   NODE_ILLEGAL,         // illegal
   NODE_COUNT
 };
@@ -62,6 +65,8 @@ class Expr {
     virtual Expr* getCond();
     virtual Expr* getThen();
     virtual Expr* getEls();
+    virtual Expr* getInit();
+    virtual Expr* getInc();
     virtual int computer() = 0;
     virtual void codegen() = 0;
     virtual int& value() = 0;
@@ -69,7 +74,6 @@ class Expr {
     int& id();
     ExprType& type();
     const char* getTypeName() const;
-    void ident(std::ostringstream& oss, int& ident_num);
 
     enum class WalkOrderType{
       PRE_ORDER = 0,
@@ -176,7 +180,7 @@ class IdentityExpr: public Expr {
 
 class StmtExpr: public NextExpr {
   public:
-    StmtExpr(Expr* next=nullptr, Expr* left=nullptr);
+    StmtExpr(Expr* left=nullptr);
     ~StmtExpr();
     virtual Expr* getLeft() override;
     virtual int computer() override;
@@ -225,6 +229,30 @@ class IfExpr: public NextExpr {
     int value_;
 };
 
+class ForExpr: public NextExpr {
+  public:
+    ForExpr(Expr* init=nullptr, Expr* cond=nullptr, Expr* inc=nullptr, NextExpr* stmts=nullptr);
+    ~ForExpr();
+    virtual Expr* getStmts() override;
+    virtual Expr* getInit() override;
+    virtual Expr* getCond() override;
+    virtual Expr* getInc() override;
+    virtual int computer() override;
+    virtual void codegen() override;
+    virtual int& value() override; // stmt value is id
+    virtual void visualize(std::ostringstream& oss, int& ident_num) override;
+    Expr*& init();
+    Expr*& cond();
+    Expr*& inc();
+    NextExpr*& stmts();
+  private:
+    Expr* init_;
+    Expr* cond_;
+    Expr* inc_;
+    NextExpr* stmts_;
+    int value_;
+};
+
 
 class Function {
   public:
@@ -243,18 +271,19 @@ class Function {
     std::map<std::size_t, Var*> var_maps_;
 };
 
-  class Ast{
-    public:
-      Ast();
-      Ast(Function* root);
-      ~Ast();
-      Function*& root();
-    
-      int computer();
-      void codegen();
-      int visualization(std::string filename);
-    private:
-      Function* root_;
-  };
+class Ast{
+  public:
+    Ast();
+    Ast(Function* root);
+    ~Ast();
+    Function*& root();
+  
+    int computer();
+    void codegen();
+    int visualization(std::string filename);
+  private:
+    Function* root_;
+};
+
 }
 #endif

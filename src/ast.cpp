@@ -9,7 +9,7 @@
 #include <sstream>
 
 
-using namespace rvcc;
+namespace rvcc {
 
 std::atomic_int Expr::g_id = 0;
 
@@ -30,6 +30,7 @@ const char* Expr::type_names[static_cast<int>(ExprType::NODE_COUNT)] {
   "NODE_RETURN",
   "NODE_COMPOUND",
   "NODE_IF",
+  "NODE_FOR",
   "Node_ILLEGAL"
 };
 
@@ -94,6 +95,14 @@ Expr* Expr::getThen() {
 }
 
 Expr* Expr::getEls() {
+  return nullptr;
+}
+
+Expr* Expr::getInit() {
+  return nullptr;
+}
+
+Expr* Expr::getInc() {
   return nullptr;
 }
 
@@ -249,11 +258,11 @@ int& BinaryExpr::value() {
 }
 
 void BinaryExpr::visualize(std::ostringstream& oss, int&ident_num) {
-  ::ident(oss, ident_num);
+  ident(oss, ident_num);
   oss << id() << " [label=\"Node " << getTypeName() << "\"," << "color=black]\n";
-  ::ident(oss, ident_num);
+  ident(oss, ident_num);
   oss << id() << " -> " << getLeft()->id() << "[label=\"left\", color=black];\n";
-  ::ident(oss, ident_num);
+  ident(oss, ident_num);
   oss << id() << " -> " << getRight()->id() << "[label=\"right\", color=black];\n";
 }
 
@@ -312,9 +321,9 @@ int& UnaryExpr::value() {
 }
 
 void UnaryExpr::visualize(std::ostringstream& oss, int& ident_num) {
-  ::ident(oss, ident_num);
+  ident(oss, ident_num);
   oss << id() << " [label=\"Node " << getTypeName() << "\"," << "color=black]\n";
-  ::ident(oss, ident_num);
+  ident(oss, ident_num);
   oss << id() << " -> " << getLeft()->id() << "[label=\"left\", color=black];\n";
 }
 
@@ -341,7 +350,7 @@ int& NumExpr::value() {
 }
 
 void NumExpr::visualize(std::ostringstream& oss, int& ident_num) {
-  ::ident(oss, ident_num);
+  ident(oss, ident_num);
   oss << id() << " [label=\"Node " << getTypeName() << ": " << value() << "\"," << "color=yellow]\n";
 }
 
@@ -380,11 +389,11 @@ void IdentityExpr::visualize(std::ostringstream& oss, int& ident_num) {
   for (int i = 0; i < var()->len(); i++) {
     name += *(var()->getName() + i);
   } 
-  ::ident(oss, ident_num);
+  ident(oss, ident_num);
   oss << id() << " [label=\"Node " << getTypeName() << ": " << name << "\"," << "color=yellow]\n";
 }
 
-StmtExpr::StmtExpr(Expr* next, Expr* left):
+StmtExpr::StmtExpr(Expr* left):
   NextExpr(ExprType::NODE_STMT) {
   left_ = left;
   value_ = 0;
@@ -442,14 +451,14 @@ int& StmtExpr::value() {
 
 void StmtExpr::visualize(std::ostringstream& oss, int& ident_num) {
 
-  ::ident(oss, ident_num);
+  ident(oss, ident_num);
   oss << id() << " [label=\"Node " << getTypeName() << "\"," << "color=red]\n";
   auto func = [&](Expr* curr_node) {
     curr_node->visualize(oss, ident_num);
   };
   if (getLeft()) {
     walkImpl<WalkOrderType::POST_ORDER>(func, getLeft());
-    ::ident(oss, ident_num);
+    ident(oss, ident_num);
     oss << id() << " -> " << getLeft()->id() << "[label=\"left\", color=black];\n";
   } else {
     WARNING("current stmt is empty!");
@@ -462,14 +471,14 @@ CompoundStmtExpr::CompoundStmtExpr(NextExpr* stmts):
 }
 
 CompoundStmtExpr::~CompoundStmtExpr() {
-  NextExpr* curr = stmts();
-  NextExpr* prev = nullptr;
+  Expr* curr = stmts();
+  Expr* prev = nullptr;
   while (curr) {
     if (prev) {
       delete prev;
     }
     prev = curr;
-    curr = dynamic_cast<NextExpr*>(curr->getNext());
+    curr = curr->getNext();
   } 
 }
 
@@ -522,7 +531,7 @@ int& CompoundStmtExpr::value() {
 }
 
 void CompoundStmtExpr::visualize(std::ostringstream& oss, int& ident_num) {
-  ::ident(oss, ident_num);
+  ident(oss, ident_num);
   oss << id() << " [label=\"Node " << getTypeName() << "\"," << "color=red]\n";
 
   if (!stmts()) {
@@ -534,13 +543,13 @@ void CompoundStmtExpr::visualize(std::ostringstream& oss, int& ident_num) {
     while (curr) {
       curr->visualize(oss, ident_num);
       if (prev) {
-        ::ident(oss, ident_num);
+        ident(oss, ident_num);
         oss << prev->id() << " -> " << curr->id() << "[label=\"next\", color=black];\n";
       }
       prev = curr;
       curr = curr->getNext();
     }
-    ::ident(oss, ident_num);
+    ident(oss, ident_num);
     oss << id() << " -> " << stmts()->id() << "[label=\"stmt\", color=black];\n";
   }
 }
@@ -551,9 +560,15 @@ IfExpr::IfExpr(Expr* cond, Expr* then, Expr* els):
 }
 
 IfExpr::~IfExpr() {
-  delete cond_;
-  delete then_;
-  delete els_;
+  if (cond()) {
+    delete cond_;
+  }
+  if (then()) {
+    delete then_;
+  }
+  if (els()) {
+    delete els_;
+  }
 }
 
 Expr* IfExpr::getCond() {
@@ -585,7 +600,11 @@ Expr*& IfExpr::els() {
 }
 
 int IfExpr::computer() {
-  if (getCond()->computer()) {
+  auto func = [&](Expr* curr_node) {
+    curr_node->computer();
+  };
+  if (walkImpl<WalkOrderType::POST_ORDER>(func, getCond()), 
+      getCond()->value()) {
     if (!getThen()) {
       FATAL("if stmt's then is nullptr");
     }
@@ -599,11 +618,15 @@ int IfExpr::computer() {
 }
 
 void IfExpr::codegen() {
-  cond()->codegen();
+  auto func = [&](Expr* curr_node) {
+    curr_node->codegen();
+  };
+  walkImpl<WalkOrderType::POST_ORDER>(func, getCond());
   pop_("a0");
   std::uint32_t unique_id = uniqueId();
   goto_else_label_("a0", unique_id);
   getThen()->codegen();
+  goto_end_label_(unique_id);
   else_label_(unique_id);
   if (getEls()) {
     getEls()->codegen();
@@ -613,27 +636,176 @@ void IfExpr::codegen() {
 
 
 void IfExpr::visualize(std::ostringstream& oss, int& ident_num) {
-  ::ident(oss, ident_num);
+  ident(oss, ident_num);
   oss << id() << " [label=\"Node " << getTypeName() << "\"," << "color=red]\n";
+  auto func = [&](Expr* curr_node) {
+    curr_node->visualize(oss, ident_num);
+  };
   if (getCond()) {
-    getCond()->visualize(oss, ident_num);
-    ::ident(oss, ident_num);
+    walkImpl<WalkOrderType::POST_ORDER>(func, getCond());
+    ident(oss, ident_num);
     oss << id() << " -> " << cond()->id() << "[label=\"cond\", color=black];\n";
   } else {
     FATAL("if stmt's cond is nullptr");
   }
   if (getThen()) {
     getThen()->visualize(oss, ident_num);
-    ::ident(oss, ident_num);
+    ident(oss, ident_num);
     oss << id() << " -> " << then()->id() << "[label=\"then\", color=black];\n";
   } else {
     FATAL("if stmt's then is nullptr");
   }
   if (getEls()) {
     getEls()->visualize(oss, ident_num);
-    ::ident(oss, ident_num);
+    ident(oss, ident_num);
     oss << id() << " -> " << then()->id() << "[label=\"else\", color=black];\n";
   }
+}
+
+ForExpr::ForExpr(Expr* init, Expr* cond, Expr* inc, NextExpr* stmts): 
+  NextExpr(ExprType::NODE_FOR), init_(init),
+  cond_(cond), inc_(inc), stmts_(stmts) {
+  value_ = 0;
+}
+
+ForExpr::~ForExpr() {
+  if (init()) {
+    delete init_;
+  }
+  if (cond()) {
+    delete cond_;
+  }
+  if (inc()) {
+    delete inc_;
+  }
+  if (stmts()) {
+    delete stmts_;
+  }
+}
+
+Expr* ForExpr::getStmts() {
+  return stmts_;
+}
+
+Expr* ForExpr::getInit() {
+  return init_;
+}
+
+Expr* ForExpr::getCond() {
+  return cond_;
+}
+
+Expr* ForExpr::getInc() {
+  return inc_;
+}
+
+Expr*& ForExpr::init() {
+  return init_;
+}
+
+Expr*& ForExpr::cond() {
+  return cond_;
+}
+
+Expr*& ForExpr::inc() {
+  return inc_;
+}
+
+NextExpr*& ForExpr::stmts() {
+  return stmts_;
+}
+
+int& ForExpr::value() {
+  return value_;
+}
+
+int ForExpr::computer() {
+  auto func = [&](Expr* curr_node) {
+    curr_node->computer();
+  };
+  if (getInit()) {
+    walkImpl<WalkOrderType::POST_ORDER>(func, getInit());
+  }
+  if (getCond()) {
+    while (walkImpl<WalkOrderType::POST_ORDER>(func, getCond()),
+           getCond()->value()) {
+      getStmts()->computer();
+      returnFlag() = dynamic_cast<NextExpr*>(getStmts())->getReturnFlag();
+      if (returnFlag()) {
+        value() = getStmts()->value();
+        return value();
+      }
+      if (getInc()) {
+        walkImpl<WalkOrderType::POST_ORDER>(func, getInc());
+      }
+    }
+  } else {
+    while (true) {
+      getStmts()->computer();
+      returnFlag() = dynamic_cast<NextExpr*>(getStmts())->getReturnFlag();
+      if (returnFlag()) {
+        value() = getStmts()->value();
+        return value();
+      }
+      if (getInc()) {
+        walkImpl<WalkOrderType::POST_ORDER>(func, getInc());
+      }
+    }
+  }
+  return value();
+}
+
+void ForExpr::codegen() {
+  auto func = [&](Expr* curr_node) {
+    curr_node->codegen();
+  };
+  if (getInit()) {
+    walkImpl<WalkOrderType::POST_ORDER>(func, getInit());
+  }
+  std::uint32_t unique_id = uniqueId();
+  loop_begin_label_(unique_id);
+  if (getCond()) {
+    walkImpl<WalkOrderType::POST_ORDER>(func, getCond());
+    pop_("a0");
+    goto_loop_end_label_("a0", unique_id);
+  }
+  if (getStmts()) {
+    getStmts()->codegen();
+  }
+  if (getInc()) {
+    walkImpl<WalkOrderType::POST_ORDER>(func, getInc());
+  }
+  goto_loop_begin_label_(unique_id);
+  end_label_(unique_id);
+}
+
+void ForExpr::visualize(std::ostringstream& oss, int& ident_num) {
+  ident(oss, ident_num);
+  oss << id() << " [label=\"Node " << getTypeName() << "\"," << "color=red]\n";
+  auto func = [&](Expr* curr_node) {
+    curr_node->visualize(oss, ident_num);
+  };
+  if (getInit()) {
+    walkImpl<WalkOrderType::POST_ORDER>(func, getInit());
+    ident(oss, ident_num);
+    oss << id() << " -> " << init()->id() << "[label=\"init\", color=black];\n";
+  }
+  if (getCond()) {
+    walkImpl<WalkOrderType::POST_ORDER>(func, getCond());
+    ident(oss, ident_num);
+    oss << id() << " -> " << cond()->id() << "[label=\"cond\", color=black];\n";
+  }
+  if (getInc()) {
+    walkImpl<WalkOrderType::POST_ORDER>(func, getInc());
+    ident(oss, ident_num);
+    oss << id() << " -> " << inc()->id() << "[label=\"inc\", color=black];\n";
+  }
+  if (getStmts()) {
+    getStmts()->visualize(oss, ident_num);
+    ident(oss, ident_num);
+    oss << id() << " -> " << stmts()->id() << "[label=\"stmts\", color=black];\n";
+  }
+
 }
 
 Function::Function() {
@@ -774,3 +946,5 @@ int Ast::visualization(std::string filename) {
   fs << oss.str();
   return 0;
 }
+
+} // end namespace rvcc

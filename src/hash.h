@@ -3,7 +3,8 @@
 
 #include <functional>
 
- 
+namespace rvcc {
+
 template<class T>
 inline  void  hash_combine(std::size_t & seed, const T & val){
 	seed ^= std::hash<T>()(val)+0x9e3779b9 + (seed << 6) + (seed >> 2);
@@ -27,4 +28,5 @@ inline  size_t  hash_val(const Types & ...args){
   return seed;
 }
 
+} // end namespace rvcc
 #endif

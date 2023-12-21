@@ -3,12 +3,13 @@
 #include <cctype>
 #include <cstdlib>
 
-using namespace rvcc;
+namespace rvcc {
 
 const char* keywords[] {
   "return",
   "if",
   "else",
+  "for",
   nullptr
 };
 
@@ -34,7 +35,7 @@ Token Lexer::getNextToken() {
       int i = 0;
       while(keywords[i] != nullptr) {
         if (startWith(new_token.getLoc(), keywords[i]) && 
-            new_token.getLen() == static_cast<int>(strlen(keywords[i]))) {
+            new_token.getLen() == strlen(keywords[i])) {
           new_token.getType() = TokenType::TOKEN_KEYWORD;
           break;
         }
@@ -80,3 +81,5 @@ void Lexer::skipSpace() {
     curr_pos_++;
   }
 }
+
+} // end namespace rvcc

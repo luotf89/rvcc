@@ -85,3 +85,19 @@ void else_label_(std::uint32_t unique_id) {
 void end_label_(std::uint32_t unique_id) {
     printf(".L.end.%d:\n", unique_id);
 }
+
+void goto_end_label_(std::uint32_t unique_id) {
+    printf("  j .L.end.%d\n", unique_id);
+}
+
+void loop_begin_label_(std::uint32_t unique_id) {
+    printf(".L.begin.%d:\n", unique_id);
+}
+
+void goto_loop_begin_label_(std::uint32_t unique_id) {
+    printf("  j .L.begin.%d\n", unique_id);
+}
+
+void goto_loop_end_label_(const char* reg, std::uint32_t unique_id) {
+    printf("  beqz %s, .L.end.%d\n", reg, unique_id);
+}
