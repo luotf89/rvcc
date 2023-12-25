@@ -40,7 +40,7 @@ Expr* Parser::parser_compound_stmt() {
   }
   startWithStr("}", compound_stmt, lexer_);
   lexer_.consumerToken();
-  compound_stmt->stmts() = dynamic_cast<NextExpr*>(head->getNext());
+  compound_stmt->stmts() = head->getNext();
   head->next() = nullptr;
   delete head;
   return compound_stmt;
@@ -94,9 +94,20 @@ Expr* Parser::parser_stmt() {
       }
       startWithStr(")", for_stmt, lexer_);
       lexer_.consumerToken();
-      for_stmt->stmts() = dynamic_cast<NextExpr*>(parser_stmt());
+      for_stmt->stmts() = parser_stmt();
     }
     stmt = for_stmt;
+  } else if (startWithStr("while", lexer_)) {
+    lexer_.consumerToken();
+    WhileExpr* while_stmt = new WhileExpr();
+    if (startWithStr("(", while_stmt, lexer_)) {
+      lexer_.consumerToken();
+      while_stmt->cond() = parser_expr();
+      startWithStr(")", while_stmt, lexer_);
+      lexer_.consumerToken();
+      while_stmt->stmts() = parser_stmt();
+    }
+    stmt = while_stmt;
   } else {
     // 空语句的处理逻辑 ;;
     if (startWithStr(";", lexer_)) {
@@ -247,5 +258,6 @@ Ast* Parser::parser_ast() {
   ast->root() = new Function();
   ast->root()->body() = parser_program();
   ast->root()->var_maps() = std::move(var_maps_);
+  ast->root()->getVarOffsets();
   return ast;
 }

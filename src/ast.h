@@ -33,7 +33,8 @@ enum class ExprType:int{
   NODE_RETURN,
   NODE_COMPOUND,
   NODE_IF,
-  NODE_FOR,       
+  NODE_FOR,
+  NODE_WHILE,       
   NODE_ILLEGAL,         // illegal
   NODE_COUNT
 };
@@ -74,30 +75,6 @@ class Expr {
     int& id();
     ExprType& type();
     const char* getTypeName() const;
-
-    enum class WalkOrderType{
-      PRE_ORDER = 0,
-      IN_ORDER = 1,
-      POST_ORDER = 2
-    };
-    using Func = std::function<void(Expr*)>;
-    template<WalkOrderType walk_order>
-    void static walkImpl(Func func, Expr*curr) {
-      if (!curr) {
-        return;
-      }
-      if constexpr (walk_order == WalkOrderType::PRE_ORDER) {
-        func(curr);
-      }
-      walkImpl<walk_order>(func, curr->getLeft());
-      if constexpr(walk_order == WalkOrderType::IN_ORDER) {
-        func(curr);
-      }
-      walkImpl<walk_order>(func, curr->getRight());
-      if constexpr(walk_order == WalkOrderType::POST_ORDER) {
-        func(curr);
-      }
-    }
   private:
     int id_;
     ExprType type_;
@@ -195,16 +172,16 @@ class StmtExpr: public NextExpr {
 
 class CompoundStmtExpr: public NextExpr {
   public:
-    CompoundStmtExpr(NextExpr* stmts=nullptr);
+    CompoundStmtExpr(Expr* stmts=nullptr);
     ~CompoundStmtExpr();
     virtual Expr* getStmts() override;
     virtual int computer() override;
     virtual void codegen() override;
     virtual int& value() override; // stmt value is id
     virtual void visualize(std::ostringstream& oss, int& ident_num) override;
-    NextExpr*& stmts();
+    Expr*& stmts();
   private:
-    NextExpr* stmts_;
+    Expr* stmts_;
     int value_;
 };
 
@@ -231,7 +208,7 @@ class IfExpr: public NextExpr {
 
 class ForExpr: public NextExpr {
   public:
-    ForExpr(Expr* init=nullptr, Expr* cond=nullptr, Expr* inc=nullptr, NextExpr* stmts=nullptr);
+    ForExpr(Expr* init=nullptr, Expr* cond=nullptr, Expr* inc=nullptr, Expr* stmts=nullptr);
     ~ForExpr();
     virtual Expr* getStmts() override;
     virtual Expr* getInit() override;
@@ -244,15 +221,32 @@ class ForExpr: public NextExpr {
     Expr*& init();
     Expr*& cond();
     Expr*& inc();
-    NextExpr*& stmts();
+    Expr*& stmts();
   private:
     Expr* init_;
     Expr* cond_;
     Expr* inc_;
-    NextExpr* stmts_;
+    Expr* stmts_;
     int value_;
 };
 
+class WhileExpr: public NextExpr {
+  public:
+    WhileExpr(Expr* cond=nullptr, Expr* stmts=nullptr);
+    ~WhileExpr();
+    virtual Expr* getStmts() override;
+    virtual Expr* getCond() override;
+    virtual int computer() override;
+    virtual void codegen() override;
+    virtual int& value() override; // stmt value is id
+    virtual void visualize(std::ostringstream& oss, int& ident_num) override;
+    Expr*& cond();
+    Expr*& stmts();
+  private:
+    Expr* cond_;
+    Expr* stmts_;
+    int value_;
+};
 
 class Function {
   public:

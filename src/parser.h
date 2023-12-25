@@ -10,7 +10,8 @@ compound_stmt = stmt* }
 stmt = "return" expr ";" |
        expr? ";" |
        "if" "(" expr ")" stmt ( "else" stmt )? |
-       "for" "(" expr? ";" expr? ";" expr ")" stmt |
+       "for" "(" expr? ";" expr? ";" expr? ")" stmt |
+       "while" "(" expr ")" stmt |
        "{" compound_stmt
 expr = assign
 assign = equality (= assign)*

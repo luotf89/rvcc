@@ -5,6 +5,7 @@
 
 namespace rvcc {
 
+
 class Codegen{
   public:
     explicit Codegen(Ast* ast): ast_(ast) {}
@@ -15,7 +16,11 @@ class Codegen{
     Ast* ast_;
 };
 
-}
+bool codegen_prev_func(Expr* curr_node);
+bool codegen_mid_func(Expr* curr_node);
+bool codegen_post_func(Expr* curr_node);
+
+} // end namespace rvcc
 
 #endif
 

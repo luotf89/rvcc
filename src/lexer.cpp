@@ -10,6 +10,7 @@ const char* keywords[] {
   "if",
   "else",
   "for",
+  "while",
   nullptr
 };
 

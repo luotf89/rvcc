@@ -1,5 +1,6 @@
 #include <atomic>
 #include <cstdint>
+#include "ast.h"
 #include "logger.h"
 #include "hash.h"
 #include "utils.h"
@@ -62,5 +63,53 @@ bool startWithStr(const char* str, const char* type_name, Lexer& lexer) {
   }
   return true;
 }
+
+
+void walkLeftImpl(
+  Expr* curr_node,
+  Func prev_func,
+  Func mid_func,
+  Func post_func) {
+  if (!curr_node) {
+    return;
+  }
+  if (prev_func) {
+    if(!prev_func(curr_node)) {
+      return;
+    }
+  }
+  walkLeftImpl(curr_node->getLeft(), prev_func, mid_func, post_func);
+  if (mid_func) {
+    mid_func(curr_node);
+  }
+  walkLeftImpl(curr_node->getRight(), prev_func, mid_func, post_func);
+  if (post_func) {
+    post_func(curr_node);
+  }
+}
+
+void walkRightImpl(
+  Expr* curr_node,
+  Func prev_func,
+  Func mid_func,
+  Func post_func) {
+  if (!curr_node) {
+    return;
+  }
+  if (prev_func) {
+    if (!prev_func(curr_node)) {
+      return;
+    }
+  }
+  walkRightImpl(curr_node->getRight(), prev_func, mid_func, post_func);
+  if (mid_func) {
+    mid_func(curr_node);
+  }
+  walkRightImpl(curr_node->getLeft(), prev_func, mid_func, post_func);
+  if (post_func) {
+    post_func(curr_node);
+  }
+}
+
 
 } // end namespace rvcc

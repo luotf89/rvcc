@@ -1,4 +1,5 @@
 #include "ast.h"
+#include "codegen.h"
 #include "logger.h"
 #include "utils.h"
 #include "instructions.h"
@@ -31,6 +32,7 @@ const char* Expr::type_names[static_cast<int>(ExprType::NODE_COUNT)] {
   "NODE_COMPOUND",
   "NODE_IF",
   "NODE_FOR",
+  "NODE_WHILE",
   "Node_ILLEGAL"
 };
 
@@ -190,63 +192,36 @@ void BinaryExpr::codegen() {
   int offset = 0;
   switch (type()) {
   case ExprType::NODE_ADD:
-    pop_("a1");
-    pop_("a0");
     add_("a0", "a0", "a1");
-    push_("a0");
     break;
   case ExprType::NODE_SUB:
-    pop_("a1");
-    pop_("a0");
     sub_("a0", "a0", "a1");
-    push_("a0");
     break;
   case ExprType::NODE_MUL:
-    pop_("a1");
-    pop_("a0");
     mul_("a0", "a0", "a1");
-    push_("a0");
     break;
   case ExprType::NODE_DIV:
-    pop_("a1");
-    pop_("a0");
     div_("a0", "a0", "a1");
-    push_("a0");
     break;
   case ExprType::NODE_EQ:
-    pop_("a1");
-    pop_("a0");
     xor_("a0", "a0", "a1");
     seqz_("a0", "a0");
-    push_("a0");
     break;
   case ExprType::NODE_NE:
-    pop_("a1");
-    pop_("a0");
     xor_("a0", "a0", "a1");
     snez_("a0", "a0");
-    push_("a0");
     break;
   case ExprType::NODE_LT:
-    pop_("a1");
-    pop_("a0");
     slt_("a0", "a0", "a1");
-    push_("a0");
     break;
   case ExprType::NODE_LE:
-    pop_("a1");
-    pop_("a0");
     slt_("a0", "a1", "a0");
     xori_("a0", "a0", 1);
-    push_("a0");
     break;
   case ExprType::NODE_ASSIGN:
     assert(getLeft()->type() == ExprType::NODE_ID);
     offset = -(dynamic_cast<IdentityExpr*>(getLeft())->var()->offset() + 1) * 8;
-    pop_("a0");
-    pop_("a1");
     sd_("a0", "fp", offset);
-    push_("a0");
     break;
   default:
     FATAL("binary expr cant support current type: %s", getTypeName());
@@ -304,9 +279,7 @@ int UnaryExpr::computer() {
 void UnaryExpr::codegen() {
   switch (type()) {
   case ExprType::NODE_NEG:
-    pop_("a0");
     neg_("a0", "a0");
-    push_("a0");
     break;
   case ExprType::NODE_RETURN:
     goto_return_label_();
@@ -342,7 +315,6 @@ int NumExpr::computer() {
 
 void NumExpr::codegen() {
   li_("a0", value());
-  push_("a0");
 }
 
 int& NumExpr::value() {
@@ -360,7 +332,7 @@ IdentityExpr::IdentityExpr(Var* var):
 }
 
 IdentityExpr::~IdentityExpr() {
-  if (var_) {
+  if (var()) {
     delete var_;
     var_ = nullptr;
   }
@@ -377,7 +349,6 @@ int IdentityExpr::computer() {
 void IdentityExpr::codegen() {
   int  offset = -(var()->offset() + 1) * 8;
   ld_("a0", "fp", offset);
-  push_("a0");
 }
 
 int& IdentityExpr::value() {
@@ -403,9 +374,10 @@ StmtExpr::~StmtExpr() {
   assert(!getRight());
   auto func = [](Expr* curr_node) {
     delete curr_node;
+    return true;
   };
   if (getLeft()){
-    walkImpl<WalkOrderType::POST_ORDER>(func, getLeft());
+    walkLeftImpl(getLeft(), nullptr, nullptr, func);
   }
 }
 
@@ -420,9 +392,10 @@ Expr*& StmtExpr::left() {
 int StmtExpr::computer() {
   auto func = [](Expr* curr_node) {
     curr_node->computer();
+    return true;
   };
   if (getLeft()){
-    walkImpl<WalkOrderType::POST_ORDER>(func, getLeft());
+    walkLeftImpl(getLeft(), nullptr, nullptr, func);
     value() = getLeft()->value();
     if (getLeft()->type() == ExprType::NODE_RETURN) {
       returnFlag() = true;
@@ -437,9 +410,10 @@ int StmtExpr::computer() {
 void StmtExpr::codegen() {
   auto func = [](Expr* curr_node) {
     curr_node->codegen();
+    return true;
   };
   if (getLeft()) {
-    walkImpl<WalkOrderType::POST_ORDER>(func, getLeft());
+    walkRightImpl(getLeft(), codegen_prev_func, codegen_mid_func, codegen_post_func);
   } else {
     WARNING("current stmt is empty!");
   }
@@ -455,9 +429,10 @@ void StmtExpr::visualize(std::ostringstream& oss, int& ident_num) {
   oss << id() << " [label=\"Node " << getTypeName() << "\"," << "color=red]\n";
   auto func = [&](Expr* curr_node) {
     curr_node->visualize(oss, ident_num);
+    return true;
   };
   if (getLeft()) {
-    walkImpl<WalkOrderType::POST_ORDER>(func, getLeft());
+    walkLeftImpl(getLeft(), nullptr, nullptr, func);
     ident(oss, ident_num);
     oss << id() << " -> " << getLeft()->id() << "[label=\"left\", color=black];\n";
   } else {
@@ -465,13 +440,13 @@ void StmtExpr::visualize(std::ostringstream& oss, int& ident_num) {
   }  
 }
 
-CompoundStmtExpr::CompoundStmtExpr(NextExpr* stmts):
+CompoundStmtExpr::CompoundStmtExpr(Expr* stmts):
   NextExpr(ExprType::NODE_COMPOUND), stmts_(stmts) {
   value_ = 0;
 }
 
 CompoundStmtExpr::~CompoundStmtExpr() {
-  Expr* curr = stmts();
+  Expr* curr = getStmts();
   Expr* prev = nullptr;
   while (curr) {
     if (prev) {
@@ -486,7 +461,7 @@ Expr* CompoundStmtExpr::getStmts() {
   return stmts_;
 }
 
-NextExpr*& CompoundStmtExpr::stmts() {
+Expr*& CompoundStmtExpr::stmts() {
   return stmts_;
 }
 
@@ -495,16 +470,16 @@ int CompoundStmtExpr::computer() {
     WARNING("current compound stmt is empty!");
     return 0;
   }
-  NextExpr* curr = stmts();
-  NextExpr* prev = nullptr;
+  Expr* curr = getStmts();
+  Expr* prev = nullptr;
   while (curr) {
     curr->computer();
     prev = curr;
-    returnFlag() = curr->getReturnFlag();
+    returnFlag() = dynamic_cast<NextExpr*>(curr)->getReturnFlag();
     if (getReturnFlag()) {
       break;
     }
-    curr = dynamic_cast<NextExpr*>(curr->getNext());
+    curr = curr->getNext();
   }
   if (prev) {
     value() = prev->value();
@@ -560,13 +535,17 @@ IfExpr::IfExpr(Expr* cond, Expr* then, Expr* els):
 }
 
 IfExpr::~IfExpr() {
-  if (cond()) {
-    delete cond_;
+  auto func = [&](Expr* curr_node) {
+    delete curr_node;
+    return true;
+  };
+  if (getCond()) {
+    walkLeftImpl(getCond(), nullptr, nullptr, func);
   }
-  if (then()) {
+  if (getThen()) {
     delete then_;
   }
-  if (els()) {
+  if (getEls()) {
     delete els_;
   }
 }
@@ -602,8 +581,9 @@ Expr*& IfExpr::els() {
 int IfExpr::computer() {
   auto func = [&](Expr* curr_node) {
     curr_node->computer();
+    return true;
   };
-  if (walkImpl<WalkOrderType::POST_ORDER>(func, getCond()), 
+  if (walkLeftImpl(getCond(), nullptr, nullptr, func), 
       getCond()->value()) {
     if (!getThen()) {
       FATAL("if stmt's then is nullptr");
@@ -618,20 +598,20 @@ int IfExpr::computer() {
 }
 
 void IfExpr::codegen() {
-  auto func = [&](Expr* curr_node) {
-    curr_node->codegen();
-  };
-  walkImpl<WalkOrderType::POST_ORDER>(func, getCond());
-  pop_("a0");
   std::uint32_t unique_id = uniqueId();
+  printf("\n# =====分支语句%d==============\n", unique_id);
+    // 生成条件内语句
+  printf("\n# Cond表达式%d\n", unique_id);
+  walkRightImpl(getCond(), codegen_prev_func, codegen_mid_func, codegen_post_func);
   goto_else_label_("a0", unique_id);
+  printf("\n# Then语句%d\n", unique_id);
   getThen()->codegen();
   goto_end_label_(unique_id);
   else_label_(unique_id);
   if (getEls()) {
     getEls()->codegen();
   }
-  end_label_(unique_id);
+  branch_end_label_(unique_id);
 }
 
 
@@ -640,9 +620,10 @@ void IfExpr::visualize(std::ostringstream& oss, int& ident_num) {
   oss << id() << " [label=\"Node " << getTypeName() << "\"," << "color=red]\n";
   auto func = [&](Expr* curr_node) {
     curr_node->visualize(oss, ident_num);
+    return true;
   };
   if (getCond()) {
-    walkImpl<WalkOrderType::POST_ORDER>(func, getCond());
+    walkLeftImpl(getCond(), nullptr, nullptr, func);
     ident(oss, ident_num);
     oss << id() << " -> " << cond()->id() << "[label=\"cond\", color=black];\n";
   } else {
@@ -662,23 +643,27 @@ void IfExpr::visualize(std::ostringstream& oss, int& ident_num) {
   }
 }
 
-ForExpr::ForExpr(Expr* init, Expr* cond, Expr* inc, NextExpr* stmts): 
+ForExpr::ForExpr(Expr* init, Expr* cond, Expr* inc, Expr* stmts): 
   NextExpr(ExprType::NODE_FOR), init_(init),
   cond_(cond), inc_(inc), stmts_(stmts) {
   value_ = 0;
 }
 
 ForExpr::~ForExpr() {
-  if (init()) {
-    delete init_;
+  auto func = [&](Expr* curr_node) {
+    delete  curr_node;
+    return true;
+  };
+  if (getInit()) {
+    walkLeftImpl(getInit(), nullptr, nullptr, func);
   }
-  if (cond()) {
-    delete cond_;
+  if (getCond()) {
+    walkLeftImpl(getCond(), nullptr, nullptr, func);
   }
-  if (inc()) {
-    delete inc_;
+  if (getInc()) {
+    walkLeftImpl(getInc(), nullptr, nullptr, func);
   }
-  if (stmts()) {
+  if (getStmts()) {
     delete stmts_;
   }
 }
@@ -711,7 +696,7 @@ Expr*& ForExpr::inc() {
   return inc_;
 }
 
-NextExpr*& ForExpr::stmts() {
+Expr*& ForExpr::stmts() {
   return stmts_;
 }
 
@@ -722,12 +707,13 @@ int& ForExpr::value() {
 int ForExpr::computer() {
   auto func = [&](Expr* curr_node) {
     curr_node->computer();
+    return true;
   };
   if (getInit()) {
-    walkImpl<WalkOrderType::POST_ORDER>(func, getInit());
+    walkLeftImpl(getInit(), nullptr, nullptr, func);
   }
   if (getCond()) {
-    while (walkImpl<WalkOrderType::POST_ORDER>(func, getCond()),
+    while (walkLeftImpl(getCond(), nullptr, nullptr, func),
            getCond()->value()) {
       getStmts()->computer();
       returnFlag() = dynamic_cast<NextExpr*>(getStmts())->getReturnFlag();
@@ -736,7 +722,7 @@ int ForExpr::computer() {
         return value();
       }
       if (getInc()) {
-        walkImpl<WalkOrderType::POST_ORDER>(func, getInc());
+        walkLeftImpl(getInc(), nullptr, nullptr, func);
       }
     }
   } else {
@@ -748,7 +734,7 @@ int ForExpr::computer() {
         return value();
       }
       if (getInc()) {
-        walkImpl<WalkOrderType::POST_ORDER>(func, getInc());
+        walkLeftImpl(getInc(), nullptr, nullptr, func);
       }
     }
   }
@@ -756,27 +742,28 @@ int ForExpr::computer() {
 }
 
 void ForExpr::codegen() {
-  auto func = [&](Expr* curr_node) {
-    curr_node->codegen();
-  };
-  if (getInit()) {
-    walkImpl<WalkOrderType::POST_ORDER>(func, getInit());
-  }
   std::uint32_t unique_id = uniqueId();
+  printf("\n# =====循环语句%d===============\n", unique_id);
+  if (getInit()) {
+    printf("\n# Init语句%d\n", unique_id);
+    walkRightImpl( getInit(), codegen_prev_func, codegen_mid_func, codegen_post_func);
+  }
   loop_begin_label_(unique_id);
   if (getCond()) {
-    walkImpl<WalkOrderType::POST_ORDER>(func, getCond());
-    pop_("a0");
+    printf("# Cond表达式%d\n", unique_id);
+    walkRightImpl(getCond(), codegen_prev_func, codegen_mid_func, codegen_post_func);
     goto_loop_end_label_("a0", unique_id);
   }
   if (getStmts()) {
+    printf("\n# 循环 body 语句%d\n", unique_id);
     getStmts()->codegen();
   }
   if (getInc()) {
-    walkImpl<WalkOrderType::POST_ORDER>(func, getInc());
+    printf("\n# Inc语句%d\n", unique_id);
+    walkRightImpl(getInc(), codegen_prev_func, codegen_mid_func, codegen_post_func);
   }
   goto_loop_begin_label_(unique_id);
-  end_label_(unique_id);
+  loop_end_label_(unique_id);
 }
 
 void ForExpr::visualize(std::ostringstream& oss, int& ident_num) {
@@ -784,19 +771,20 @@ void ForExpr::visualize(std::ostringstream& oss, int& ident_num) {
   oss << id() << " [label=\"Node " << getTypeName() << "\"," << "color=red]\n";
   auto func = [&](Expr* curr_node) {
     curr_node->visualize(oss, ident_num);
+    return true;
   };
   if (getInit()) {
-    walkImpl<WalkOrderType::POST_ORDER>(func, getInit());
+    walkLeftImpl(getInit(), nullptr, nullptr, func);
     ident(oss, ident_num);
     oss << id() << " -> " << init()->id() << "[label=\"init\", color=black];\n";
   }
   if (getCond()) {
-    walkImpl<WalkOrderType::POST_ORDER>(func, getCond());
+    walkLeftImpl(getCond(), nullptr, nullptr, func);
     ident(oss, ident_num);
     oss << id() << " -> " << cond()->id() << "[label=\"cond\", color=black];\n";
   }
   if (getInc()) {
-    walkImpl<WalkOrderType::POST_ORDER>(func, getInc());
+    walkLeftImpl(getInc(), nullptr, nullptr, func);
     ident(oss, ident_num);
     oss << id() << " -> " << inc()->id() << "[label=\"inc\", color=black];\n";
   }
@@ -805,7 +793,98 @@ void ForExpr::visualize(std::ostringstream& oss, int& ident_num) {
     ident(oss, ident_num);
     oss << id() << " -> " << stmts()->id() << "[label=\"stmts\", color=black];\n";
   }
+}
 
+WhileExpr::WhileExpr(Expr* cond, Expr* stmts): 
+  NextExpr(ExprType::NODE_WHILE), cond_(cond), stmts_(stmts) {
+  value_ = 0;
+}
+
+WhileExpr::~WhileExpr() {
+  auto func = [&](Expr* curr_node) {
+    delete curr_node;
+    return true;
+  };
+  if (getCond()) {
+    walkLeftImpl(getCond(), nullptr, nullptr, func);
+  }
+  if (getStmts()) {
+    delete stmts_;
+  }
+}
+
+Expr* WhileExpr::getStmts() {
+  return stmts_;
+}
+
+Expr* WhileExpr::getCond() {
+  return cond_;
+}
+
+Expr*& WhileExpr::cond() {
+  return cond_;
+}
+
+Expr*& WhileExpr::stmts() {
+  return stmts_;
+}
+
+int& WhileExpr::value() {
+  return value_;
+}
+
+int WhileExpr::computer() {
+  auto func = [&](Expr* curr_node) {
+    curr_node->computer();
+    return true;
+  };
+  assert(getCond());
+  while (walkLeftImpl(getCond(), nullptr, nullptr, func),
+          getCond()->value()) {
+    getStmts()->computer();
+    returnFlag() = dynamic_cast<NextExpr*>(getStmts())->getReturnFlag();
+    if (returnFlag()) {
+      value() = getStmts()->value();
+      return value();
+    }
+  }
+  return value();
+}
+
+void WhileExpr::codegen() {
+  std::uint32_t unique_id = uniqueId();
+  printf("\n# =====循环语句%d===============\n", unique_id);
+  loop_begin_label_(unique_id);
+  if (getCond()) {
+    printf("# Cond表达式%d\n", unique_id);
+    walkRightImpl( getCond(), codegen_prev_func, codegen_mid_func, codegen_post_func);
+    goto_loop_end_label_("a0", unique_id);
+  }
+  if (getStmts()) {
+    printf("\n# 循环 body 语句%d\n", unique_id);
+    getStmts()->codegen();
+  }
+  goto_loop_begin_label_(unique_id);
+  loop_end_label_(unique_id);
+}
+
+void WhileExpr::visualize(std::ostringstream& oss, int& ident_num) {
+  ident(oss, ident_num);
+  oss << id() << " [label=\"Node " << getTypeName() << "\"," << "color=red]\n";
+  auto func = [&](Expr* curr_node) {
+    curr_node->visualize(oss, ident_num);
+    return true;
+  };
+  if (getCond()) {
+    walkLeftImpl(getCond(), nullptr, nullptr, func);
+    ident(oss, ident_num);
+    oss << id() << " -> " << cond()->id() << "[label=\"cond\", color=black];\n";
+  }
+  if (getStmts()) {
+    getStmts()->visualize(oss, ident_num);
+    ident(oss, ident_num);
+    oss << id() << " -> " << stmts()->id() << "[label=\"stmts\", color=black];\n";
+  }
 }
 
 Function::Function() {
