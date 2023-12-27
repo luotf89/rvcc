@@ -12,10 +12,6 @@ Ast*& Codegen::ast() {
   return ast_;
 }
 
-int Codegen::compute() {
-  return ast_->computer();
-}
-
 void Codegen::codegen() {
   int stack_size = ast_->root()->var_maps().size();
   start_();
@@ -37,20 +33,12 @@ void Codegen::codegen() {
 bool codegen_prev_func(Expr* curr_node) {
   if (curr_node->type() == ExprType::NODE_NUM ||
         curr_node->type() == ExprType::NODE_ID ||
-        curr_node->type() == ExprType::NODE_ASSIGN ||
         curr_node->type() == ExprType::NODE_NEG ||
-        curr_node->type() == ExprType::NODE_RETURN) {
-    if (curr_node->type() == ExprType::NODE_NUM ||
-        curr_node->type() == ExprType::NODE_ID) {
-      curr_node->codegen();
-    } else if (curr_node->type() == ExprType::NODE_NEG ||
-               curr_node->type() == ExprType::NODE_RETURN){
-      walkRightImpl(curr_node->getLeft(), codegen_prev_func, codegen_mid_func, codegen_post_func);
-      curr_node->codegen();
-    } else {
-      walkRightImpl(curr_node->getRight(), codegen_prev_func, codegen_mid_func, codegen_post_func);
-      curr_node->codegen();
-    }
+        curr_node->type() == ExprType::NODE_ADDR ||
+        curr_node->type() == ExprType::NODE_DEREF ||
+        curr_node->type() == ExprType::NODE_RETURN ||
+        curr_node->type() == ExprType::NODE_ASSIGN) { 
+    curr_node->codegen();
     return false;
   }
   return true;
@@ -65,6 +53,21 @@ bool codegen_post_func(Expr* curr_node) {
   pop_("a1");
   curr_node->codegen();
   return true;
+}
+
+void genAddr(Expr* curr_node) {
+  int offset = 0;
+  switch (curr_node->type()) {
+    case ExprType::NODE_ID:
+      offset =  -(dynamic_cast<IdentityExpr*>(curr_node)->var()->offset() + 1) * 8;
+      addi_("a0", "fp", offset);
+      break;
+    case ExprType::NODE_DEREF:
+      walkRightImpl(curr_node->getLeft(), codegen_prev_func, codegen_mid_func, codegen_post_func);
+      break;
+    default:
+      FATAL("node type:  %s not support get addr", curr_node->getTypeName());
+  }
 }
 
 }

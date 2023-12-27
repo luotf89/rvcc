@@ -17,24 +17,30 @@
 namespace rvcc {
 
 enum class ExprType:int{
-  NODE_ADD = 0,         // +
+  //叶子节点
+  NODE_NUM = 0,         // number
+  NODE_ID,              // identify
+  // unary op
+  NODE_NEG,             // 取反操作
+  NODE_ADDR,            // 取地址 &
+  NODE_DEREF,           // 解引用 *
+  NODE_RETURN,
+  // binary op
+  NODE_ADD,              // +
   NODE_SUB,             // -
   NODE_MUL,             // *
   NODE_DIV,             // /
-  NODE_NUM,             // number
-  NODE_NEG,             // '-'          
   NODE_EQ,              // ==
   NODE_NE,              // !=
   NODE_LT,              // <
   NODE_LE,              // <=
-  NODE_ID,              // identify
   NODE_ASSIGN,          // =
+  // 语句
   NODE_STMT,
-  NODE_RETURN,
   NODE_COMPOUND,
   NODE_IF,
   NODE_FOR,
-  NODE_WHILE,       
+  NODE_WHILE,      
   NODE_ILLEGAL,         // illegal
   NODE_COUNT
 };
@@ -68,7 +74,6 @@ class Expr {
     virtual Expr* getEls();
     virtual Expr* getInit();
     virtual Expr* getInc();
-    virtual int computer() = 0;
     virtual void codegen() = 0;
     virtual int& value() = 0;
     virtual void visualize(std::ostringstream& oss, int& ident_num) = 0;
@@ -104,7 +109,6 @@ class BinaryExpr: public Expr {
                Expr* right=nullptr);
     virtual Expr* getLeft() override;
     virtual Expr* getRight() override;
-    virtual int computer() override;
     virtual void codegen() override;
     virtual int& value() override;
     virtual void visualize(std::ostringstream& oss, int& ident_num) override;
@@ -121,7 +125,6 @@ class UnaryExpr: public Expr {
     UnaryExpr();
     UnaryExpr(ExprType type, Expr* left=nullptr);
     virtual Expr* getLeft() override;
-    virtual int computer() override;
     virtual void codegen() override;
     virtual int& value() override;
     virtual void visualize(std::ostringstream& oss, int& ident_num) override;
@@ -134,7 +137,6 @@ class UnaryExpr: public Expr {
 class NumExpr: public Expr {
   public:
     NumExpr(int value=0);
-    virtual int computer() override;
     virtual void codegen() override;
     virtual int& value() override;
     virtual void visualize(std::ostringstream& oss, int& ident_num) override;
@@ -146,7 +148,6 @@ class IdentityExpr: public Expr {
   public:
     IdentityExpr(Var* var=nullptr);
     ~IdentityExpr();
-    virtual int computer() override;
     virtual void codegen() override;
     virtual int& value() override;
     virtual void visualize(std::ostringstream& oss, int& ident_num) override;
@@ -160,7 +161,6 @@ class StmtExpr: public NextExpr {
     StmtExpr(Expr* left=nullptr);
     ~StmtExpr();
     virtual Expr* getLeft() override;
-    virtual int computer() override;
     virtual void codegen() override;
     virtual int& value() override; // stmt value is id
     virtual void visualize(std::ostringstream& oss, int& ident_num) override;
@@ -175,7 +175,6 @@ class CompoundStmtExpr: public NextExpr {
     CompoundStmtExpr(Expr* stmts=nullptr);
     ~CompoundStmtExpr();
     virtual Expr* getStmts() override;
-    virtual int computer() override;
     virtual void codegen() override;
     virtual int& value() override; // stmt value is id
     virtual void visualize(std::ostringstream& oss, int& ident_num) override;
@@ -192,7 +191,6 @@ class IfExpr: public NextExpr {
     virtual Expr* getCond() override;
     virtual Expr* getThen() override;
     virtual Expr* getEls() override;
-    virtual int computer() override;
     virtual void codegen() override;
     virtual int& value() override; // stmt value is id
     virtual void visualize(std::ostringstream& oss, int& ident_num) override;
@@ -214,7 +212,6 @@ class ForExpr: public NextExpr {
     virtual Expr* getInit() override;
     virtual Expr* getCond() override;
     virtual Expr* getInc() override;
-    virtual int computer() override;
     virtual void codegen() override;
     virtual int& value() override; // stmt value is id
     virtual void visualize(std::ostringstream& oss, int& ident_num) override;
@@ -236,7 +233,6 @@ class WhileExpr: public NextExpr {
     ~WhileExpr();
     virtual Expr* getStmts() override;
     virtual Expr* getCond() override;
-    virtual int computer() override;
     virtual void codegen() override;
     virtual int& value() override; // stmt value is id
     virtual void visualize(std::ostringstream& oss, int& ident_num) override;
@@ -253,10 +249,8 @@ class Function {
     Function();
     Function(Expr* body, std::map<std::size_t, Var*>&& var_maps);
     ~Function();
-    void getVarOffsets();
     std::map<std::size_t, Var*>& var_maps();
     void visualize(std::ostringstream& oss, int& ident_num);
-    int computer();
     void codegen();
     Expr*& body(); 
   private:
@@ -271,8 +265,6 @@ class Ast{
     Ast(Function* root);
     ~Ast();
     Function*& root();
-  
-    int computer();
     void codegen();
     int visualization(std::string filename);
   private:

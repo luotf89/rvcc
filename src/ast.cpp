@@ -15,20 +15,26 @@ namespace rvcc {
 std::atomic_int Expr::g_id = 0;
 
 const char* Expr::type_names[static_cast<int>(ExprType::NODE_COUNT)] {
+  // 叶子节点
+  "NODE_NUM",
+  "NODE_ID",
+  // unary op
+  "NODE_NEG",
+  "NODE_ADDR",
+  "NODE_DEREF",
+  "NODE_RETURN",
+  // binary op
   "NODE_ADD",
   "NODE_SUB",
   "NODE_MUL",
   "NODE_DIV",
-  "NODE_NUM",
-  "NODE_NEG",
   "NODE_EQ",
   "NODE_NE",
   "NODE_LT",
   "NODE_LE",
-  "NODE_ID",
   "NODE_ASSIGN",
+  // 语句
   "NODE_STMT",
-  "NODE_RETURN",
   "NODE_COMPOUND",
   "NODE_IF",
   "NODE_FOR",
@@ -152,42 +158,6 @@ Expr* BinaryExpr::getRight() {
   return right_;
 }
 
-int BinaryExpr::computer() {
-  switch (type()) {
-  case ExprType::NODE_ADD:
-    value() = getLeft()->value() + getRight()->value();
-    break;
-  case ExprType::NODE_SUB:
-    value() = getLeft()->value() - getRight()->value();
-    break;
-  case ExprType::NODE_MUL:
-    value() = getLeft()->value() * getRight()->value();
-    break;
-  case ExprType::NODE_DIV:
-    value() = getLeft()->value() / getRight()->value();
-    break;
-  case ExprType::NODE_EQ:
-    value() = getLeft()->value() == getRight()->value();
-    break;
-  case ExprType::NODE_NE:
-    value() = getLeft()->value() != getRight()->value();
-    break;
-  case ExprType::NODE_LT:
-    value() = getLeft()->value() < getRight()->value();
-    break;
-  case ExprType::NODE_LE:
-    value() = getLeft()->value() <= getRight()->value();
-    break;
-  case ExprType::NODE_ASSIGN:
-    getLeft()->value() = getRight()->value();
-    value() = getRight()->value();
-    break;
-  default:
-    FATAL("binary expr cant support current type: %s", getTypeName());
-  }
-  return value();
-}
-
 void BinaryExpr::codegen() {
   int offset = 0;
   switch (type()) {
@@ -219,9 +189,17 @@ void BinaryExpr::codegen() {
     xori_("a0", "a0", 1);
     break;
   case ExprType::NODE_ASSIGN:
-    assert(getLeft()->type() == ExprType::NODE_ID);
-    offset = -(dynamic_cast<IdentityExpr*>(getLeft())->var()->offset() + 1) * 8;
-    sd_("a0", "fp", offset);
+    if (getLeft()->type() == ExprType::NODE_ID) {
+      walkRightImpl(getRight(), codegen_prev_func, codegen_mid_func, codegen_post_func);
+      offset = -(dynamic_cast<IdentityExpr*>(getLeft())->var()->offset() + 1) * 8;
+      sd_("a0", "fp", offset);
+    } else if (getLeft()->type() == ExprType::NODE_DEREF) {
+      genAddr(getLeft());
+      push_("a0");
+      walkRightImpl(getRight(), codegen_prev_func, codegen_mid_func, codegen_post_func);
+      pop_("a1");
+      sd_("a0", "a1", 0);
+    }
     break;
   default:
     FATAL("binary expr cant support current type: %s", getTypeName());
@@ -262,27 +240,22 @@ Expr* UnaryExpr::getLeft() {
   return left_;
 }
 
-int UnaryExpr::computer() {
-  switch (type()) {
-  case ExprType::NODE_NEG:
-    value() = -getLeft()->value();
-    break;
-  case ExprType::NODE_RETURN:
-    value() = getLeft()->value();
-    break;
-  default:
-    ERROR("unary expr cant support current type: %s", getTypeName());
-  }
-  return value();
-}
-
 void UnaryExpr::codegen() {
   switch (type()) {
   case ExprType::NODE_NEG:
+    walkRightImpl(getLeft(), codegen_prev_func, codegen_mid_func, codegen_post_func);
     neg_("a0", "a0");
     break;
   case ExprType::NODE_RETURN:
+    walkRightImpl(getLeft(), codegen_prev_func, codegen_mid_func, codegen_post_func);
     goto_return_label_();
+    break;
+  case ExprType::NODE_ADDR:
+    genAddr(getLeft());
+    break;
+  case ExprType::NODE_DEREF:
+    walkRightImpl(getLeft(), codegen_prev_func, codegen_mid_func, codegen_post_func);
+    ld_("a0", "a0", 0);
     break;
   default:
     ERROR("unary expr cant support current type: %s", getTypeName());
@@ -307,10 +280,6 @@ Expr*& UnaryExpr::left() {
 NumExpr::NumExpr(int value):
   Expr(ExprType::NODE_NUM) {
   value_ = value;
-}
-
-int NumExpr::computer() {
-  return value();
 }
 
 void NumExpr::codegen() {
@@ -340,10 +309,6 @@ IdentityExpr::~IdentityExpr() {
 
 Var*& IdentityExpr::var() {
   return var_;
-}
-
-int IdentityExpr::computer() {
-  return value();
 }
 
 void IdentityExpr::codegen() {
@@ -389,29 +354,7 @@ Expr*& StmtExpr::left() {
   return left_;
 }
 
-int StmtExpr::computer() {
-  auto func = [](Expr* curr_node) {
-    curr_node->computer();
-    return true;
-  };
-  if (getLeft()){
-    walkLeftImpl(getLeft(), nullptr, nullptr, func);
-    value() = getLeft()->value();
-    if (getLeft()->type() == ExprType::NODE_RETURN) {
-      returnFlag() = true;
-    }
-  } else {
-    WARNING("current stmt is empty!");
-  }
-  
-  return value();
-}
-
 void StmtExpr::codegen() {
-  auto func = [](Expr* curr_node) {
-    curr_node->codegen();
-    return true;
-  };
   if (getLeft()) {
     walkRightImpl(getLeft(), codegen_prev_func, codegen_mid_func, codegen_post_func);
   } else {
@@ -463,30 +406,6 @@ Expr* CompoundStmtExpr::getStmts() {
 
 Expr*& CompoundStmtExpr::stmts() {
   return stmts_;
-}
-
-int CompoundStmtExpr::computer() {
-  if (!stmts()) {
-    WARNING("current compound stmt is empty!");
-    return 0;
-  }
-  Expr* curr = getStmts();
-  Expr* prev = nullptr;
-  while (curr) {
-    curr->computer();
-    prev = curr;
-    returnFlag() = dynamic_cast<NextExpr*>(curr)->getReturnFlag();
-    if (getReturnFlag()) {
-      break;
-    }
-    curr = curr->getNext();
-  }
-  if (prev) {
-    value() = prev->value();
-  } else {
-    WARNING("current compound stmt is empty!");
-  }
-  return value();
 }
 
 void CompoundStmtExpr::codegen() {
@@ -576,25 +495,6 @@ Expr*& IfExpr::then() {
 
 Expr*& IfExpr::els() {
   return els_;
-}
-
-int IfExpr::computer() {
-  auto func = [&](Expr* curr_node) {
-    curr_node->computer();
-    return true;
-  };
-  if (walkLeftImpl(getCond(), nullptr, nullptr, func), 
-      getCond()->value()) {
-    if (!getThen()) {
-      FATAL("if stmt's then is nullptr");
-    }
-    value() = getThen()->computer();
-    returnFlag() = dynamic_cast<NextExpr*>(getThen()) ->getReturnFlag();
-  } else if (!(getCond()->computer()) && getEls()) {
-    value() = getEls()->computer();
-    returnFlag() = dynamic_cast<NextExpr*>(getEls()) ->getReturnFlag();
-  }
-  return value();
 }
 
 void IfExpr::codegen() {
@@ -704,43 +604,6 @@ int& ForExpr::value() {
   return value_;
 }
 
-int ForExpr::computer() {
-  auto func = [&](Expr* curr_node) {
-    curr_node->computer();
-    return true;
-  };
-  if (getInit()) {
-    walkLeftImpl(getInit(), nullptr, nullptr, func);
-  }
-  if (getCond()) {
-    while (walkLeftImpl(getCond(), nullptr, nullptr, func),
-           getCond()->value()) {
-      getStmts()->computer();
-      returnFlag() = dynamic_cast<NextExpr*>(getStmts())->getReturnFlag();
-      if (returnFlag()) {
-        value() = getStmts()->value();
-        return value();
-      }
-      if (getInc()) {
-        walkLeftImpl(getInc(), nullptr, nullptr, func);
-      }
-    }
-  } else {
-    while (true) {
-      getStmts()->computer();
-      returnFlag() = dynamic_cast<NextExpr*>(getStmts())->getReturnFlag();
-      if (returnFlag()) {
-        value() = getStmts()->value();
-        return value();
-      }
-      if (getInc()) {
-        walkLeftImpl(getInc(), nullptr, nullptr, func);
-      }
-    }
-  }
-  return value();
-}
-
 void ForExpr::codegen() {
   std::uint32_t unique_id = uniqueId();
   printf("\n# =====循环语句%d===============\n", unique_id);
@@ -833,24 +696,6 @@ int& WhileExpr::value() {
   return value_;
 }
 
-int WhileExpr::computer() {
-  auto func = [&](Expr* curr_node) {
-    curr_node->computer();
-    return true;
-  };
-  assert(getCond());
-  while (walkLeftImpl(getCond(), nullptr, nullptr, func),
-          getCond()->value()) {
-    getStmts()->computer();
-    returnFlag() = dynamic_cast<NextExpr*>(getStmts())->getReturnFlag();
-    if (returnFlag()) {
-      value() = getStmts()->value();
-      return value();
-    }
-  }
-  return value();
-}
-
 void WhileExpr::codegen() {
   std::uint32_t unique_id = uniqueId();
   printf("\n# =====循环语句%d===============\n", unique_id);
@@ -919,15 +764,6 @@ Function::~Function() {
   }
 }
 
-
-void Function::getVarOffsets() {
-  int idx = 0;
-  for (auto& elem : var_maps_) {
-    elem.second->offset() = idx;
-    idx++;
-  }
-}
-
 void Function::visualize(std::ostringstream& oss, int& ident_num) {
   if (!body()) {
     WARNING("curr stmt is empty, can't be computed");
@@ -947,25 +783,6 @@ void Function::visualize(std::ostringstream& oss, int& ident_num) {
     prev = curr;
     curr = curr->getNext();
   };
-}
-
-int Function::computer() {
-  if (!body()) {
-    WARNING("curr stmt is empty, can't be computed");
-    return 0;
-  }
-  if (body()->getNext()) {
-    WARNING("curr funtion has more than one top compound stmt");
-  }
-  
-  Expr* curr = body();
-  Expr* prev = nullptr;
-  while(curr) {
-    curr->computer();
-    prev = curr;
-    curr = curr->getNext();
-  };
-  return prev->value();
 }
 
 void Function::codegen() {
@@ -996,10 +813,6 @@ Ast::~Ast() {
 
 Function*& Ast::root() {
   return root_;
-}
-
-int Ast::computer() {
-  return root_->computer();
 }
 
 void Ast::codegen() {

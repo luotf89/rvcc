@@ -47,4 +47,9 @@ class Logger {
 #define FATAL(format, ...) \
   LOG(FATAL, format, ##__VA_ARGS__)
 
+#define CHECK(expr)              \
+  if (!(expr)) {                 \
+    FATAL("expact %s", #expr)    \
+  }
+
 #endif

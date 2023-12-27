@@ -18,8 +18,8 @@ void seqz_(const char* dst, const char* src);
 void snez_(const char* dst, const char* src);
 void slt_(const char* dst, const char* src1, const char* src2);
 void li_(const char* dst, int val);
-void sd_(const char* src, const char* dst, int offset);
-void ld_(const char* dst, const char* src, int offset);
+void sd_(const char* reg, const char* addr, int offset);
+void ld_(const char* reg, const char* addr, int offset);
 void neg_(const char* dst, const char* src);
 void ret_();
 

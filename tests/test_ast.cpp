@@ -1,8 +1,6 @@
 #include "../src/ast.h"
 #include "../src/logger.h"
 #include "../src/parser.h"
-#include "../src/codegen.h"
-#include <cassert>
 
 using namespace rvcc;
 
@@ -17,7 +15,6 @@ int main(int argc, char** argv) {
   Parser parser(argv[1]);
   Ast* ast = parser.parser_ast();
   ast->visualization("graph.dot");
-  Codegen* codegen = new Codegen(ast);
-  auto ret = codegen->compute();
-  return ret;
+
+  return 0;
 }

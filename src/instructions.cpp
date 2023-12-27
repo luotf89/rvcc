@@ -15,7 +15,7 @@ void sub_(const char* dst, const char* src1, const char* src2) {
     printf("  sub %s, %s, %s\n", dst, src1, src2);
 };
 void addi_(const char* dst, const char* src, int val) {
-    printf("  # %s * %d，结果写入 %s\n", src, val, dst);
+    printf("  # %s + %d，结果写入 %s\n", src, val, dst);
     printf("  addi %s, %s, %d\n", dst, src, val);
 };
 void mul_(const char* dst, const char* src1, const char* src2) {
@@ -83,7 +83,7 @@ void pop_(const char* reg) {
 };
 
 void start_() {
-    printf("  # 定义全局main段\n");
+    printf("# 定义全局main段\n");
     printf(".globl main\n");
     printf("\n# =====程序开始===============\n");
     printf("# main段标签，也是程序入口段\n");

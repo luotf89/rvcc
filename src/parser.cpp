@@ -212,13 +212,19 @@ Expr* Parser::parser_mul() {
 Expr* Parser::parser_unary() {
   Expr* expr;
   if (startWithStr("+", lexer_) || 
-      startWithStr("-", lexer_)) {
+      startWithStr("-", lexer_) || 
+      startWithStr("*", lexer_) ||
+      startWithStr("&", lexer_)) {
     char punct = *(lexer_.getCurrToken().getLoc());
     lexer_.consumerToken();
     if (punct == '+') {
       expr = parser_unary();
-    } else {
+    } else if (punct == '-'){
       expr = unaryOp(parser_unary(), ExprType::NODE_NEG);
+    } else if (punct == '*'){
+      expr = unaryOp(parser_unary(), ExprType::NODE_DEREF);
+    } else {
+      expr = unaryOp(parser_unary(), ExprType::NODE_ADDR);
     }
   } else {
     expr = parser_primary();
@@ -238,6 +244,7 @@ Expr* Parser::parser_primary() {
     if (var_maps_.count(hash_value) == 0) {
       var = new Var(lexer_.getCurrToken().getLoc(), 
                    lexer_.getCurrToken().getLen());
+      var->offset() = var_idx_++;
       assert(var_maps_.insert({hash_value, var}).second);
     } else {
       var = var_maps_[hash_value];
@@ -258,6 +265,5 @@ Ast* Parser::parser_ast() {
   ast->root() = new Function();
   ast->root()->body() = parser_program();
   ast->root()->var_maps() = std::move(var_maps_);
-  ast->root()->getVarOffsets();
   return ast;
 }

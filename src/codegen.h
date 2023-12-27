@@ -10,7 +10,6 @@ class Codegen{
   public:
     explicit Codegen(Ast* ast): ast_(ast) {}
     Ast*& ast();
-    int compute();
     void codegen();
   private:
     Ast* ast_;
@@ -19,6 +18,7 @@ class Codegen{
 bool codegen_prev_func(Expr* curr_node);
 bool codegen_mid_func(Expr* curr_node);
 bool codegen_post_func(Expr* curr_node);
+void genAddr(Expr* curr_node);
 
 } // end namespace rvcc
 

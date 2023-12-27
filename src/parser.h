@@ -19,13 +19,13 @@ equality =  relation ("==" relation | "!=" relation)*
 relation = add ("<" add | ">" add | "<=" add | ">=" add)*
 add = mul ("+" mul | "-" mul)*
 mul = unary ("*" unary | "/" unary)*
-unary = ("+" | "-" )unary | primary
+unary = ("+" | "-" | "*" | "&")unary | primary
 primary = val | "("expr")"
 */
 namespace rvcc {
   class Parser{
     public:
-      Parser(const char* buffer):lexer_(buffer){}
+      Parser(const char* buffer):lexer_(buffer), var_idx_(0){}
       void init();
       Ast* parser_ast();
       static Expr* binaryOp(Expr* left, Expr*right, ExprType type);
@@ -44,6 +44,7 @@ namespace rvcc {
       Expr* parser_primary();
       Lexer lexer_;
       std::map<std::size_t, Var*> var_maps_;
+      int var_idx_;
   };
 }
 #endif
