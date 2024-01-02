@@ -8,7 +8,7 @@
 
 namespace rvcc {
 
-enum class TokenType:int{
+enum class TokenKind:int{
   TOKEN_ID = 0,
   TOKEN_PUNCT,
   TOKEN_NUM,
@@ -21,26 +21,26 @@ enum class TokenType:int{
 class Token {
   public:
     Token();
-    Token(TokenType type, int val, char* loc, int len);
-    TokenType& getType() {
-      return type_;
+    Token(TokenKind kind, int val, char* loc, int len);
+    TokenKind& kind() {
+      return kind_;
     }
-    int& getValue() {
+    int& value() {
       return val_;
     }
-    char*& getLoc() {
+    char*& loc() {
       return loc_;
     }
-    std::size_t& getLen() {
+    std::size_t& len() {
       return len_;
     }
-    const char* getTypeName() const;
+    const char* kindName() const;
   private:
-    TokenType type_;
+    TokenKind kind_;
     int val_;
     char* loc_;
     std::size_t len_;
-    static const char* type_names[static_cast<int>(TokenType::TOKEN_COUNT)];
+    static const char* kind_names[static_cast<int>(TokenKind::TOKEN_COUNT)];
 };
 
 }

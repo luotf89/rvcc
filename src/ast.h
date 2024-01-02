@@ -4,6 +4,7 @@
 
 #include "lexer.h"
 #include "token.h"
+#include "type.h"
 #include <atomic>
 #include <cassert>
 #include <cstddef>
@@ -16,7 +17,7 @@
 
 namespace rvcc {
 
-enum class ExprType:int{
+enum class ExprKind:int{
   //叶子节点
   NODE_NUM = 0,         // number
   NODE_ID,              // identify
@@ -62,7 +63,7 @@ class Var{
 
 class Expr {
   public:
-    explicit Expr(ExprType type);
+    explicit Expr(ExprKind kind);
     Expr();
     virtual ~Expr() {}
     virtual Expr* getNext();     // 方便调试
@@ -74,17 +75,18 @@ class Expr {
     virtual Expr* getEls();
     virtual Expr* getInit();
     virtual Expr* getInc();
+    virtual Type* getType();
     virtual void codegen() = 0;
     virtual int& value() = 0;
     virtual void visualize(std::ostringstream& oss, int& ident_num) = 0;
     int& id();
-    ExprType& type();
-    const char* getTypeName() const;
+    ExprKind& kind();
+    const char* kindName() const;
   private:
     int id_;
-    ExprType type_;
+    ExprKind kind_;
     static std::atomic_int g_id;
-    static const char* type_names[static_cast<int>(ExprType::NODE_COUNT)];
+    static const char* kind_names[static_cast<int>(ExprKind::NODE_COUNT)];
 
 };
 /*
@@ -93,7 +95,7 @@ stmt的种类包括 单语句 复合语句 if-else for call 等等
 */
 class NextExpr : public Expr {
   public:
-    NextExpr(ExprType type, Expr* next=nullptr);
+    NextExpr(ExprKind kind, Expr* next=nullptr);
     Expr * getNext() override;
     Expr*& next();
     bool getReturnFlag();
@@ -105,55 +107,67 @@ class NextExpr : public Expr {
 
 class BinaryExpr: public Expr {
   public:
-    BinaryExpr(ExprType type, Expr* left=nullptr,
+    BinaryExpr(ExprKind kind, Expr* left=nullptr,
                Expr* right=nullptr);
     virtual Expr* getLeft() override;
     virtual Expr* getRight() override;
+    virtual Type* getType() override;
     virtual void codegen() override;
     virtual int& value() override;
     virtual void visualize(std::ostringstream& oss, int& ident_num) override;
+    Type*& type();
     Expr*& left();
     Expr*& right();
   private:
     int value_;
     Expr* left_;
     Expr* right_;
+    Type* type_;
 };
 
 class UnaryExpr: public Expr {
   public:
     UnaryExpr();
-    UnaryExpr(ExprType type, Expr* left=nullptr);
+    UnaryExpr(ExprKind kind, Expr* left=nullptr);
     virtual Expr* getLeft() override;
+    virtual Type* getType() override;
     virtual void codegen() override;
     virtual int& value() override;
     virtual void visualize(std::ostringstream& oss, int& ident_num) override;
+    Type*& type();
     Expr*& left();
   private:
     int value_;
     Expr* left_;
+    Type* type_;
 };
 
 class NumExpr: public Expr {
   public:
     NumExpr(int value=0);
+    virtual Type* getType() override;
     virtual void codegen() override;
     virtual int& value() override;
     virtual void visualize(std::ostringstream& oss, int& ident_num) override;
+    Type*& type();
   private:
     int value_;
+    Type* type_;
 };
 
 class IdentityExpr: public Expr {
   public:
     IdentityExpr(Var* var=nullptr);
     ~IdentityExpr();
+    virtual Type* getType() override;
     virtual void codegen() override;
     virtual int& value() override;
     virtual void visualize(std::ostringstream& oss, int& ident_num) override;
+    Type*& type();
     Var*& var();
   private:
     Var* var_;
+    Type* type_;
 };
 
 class StmtExpr: public NextExpr {

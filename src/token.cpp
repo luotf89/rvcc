@@ -3,7 +3,7 @@
 namespace rvcc {
 
 
-const char* Token::type_names[static_cast<int>(TokenType::TOKEN_COUNT)] {
+const char* Token::kind_names[static_cast<int>(TokenKind::TOKEN_COUNT)] {
   "TOKEN_ID",
   "TOKEN_EOF",
   "TOKEN_NUM",
@@ -13,16 +13,16 @@ const char* Token::type_names[static_cast<int>(TokenType::TOKEN_COUNT)] {
 };
 
 Token::Token() {
-  type_ = TokenType::TOKEN_ILLEGAL;
+  kind_ = TokenKind::TOKEN_ILLEGAL;
   val_ = 0;
   loc_ = nullptr;
 }
 
-Token::Token(TokenType type, int val, char* loc, int len): 
-  type_(type),val_(val), loc_(loc), len_(len) {}
+Token::Token(TokenKind kind, int val, char* loc, int len): 
+  kind_(kind),val_(val), loc_(loc), len_(len) {}
 
-const char* Token::getTypeName() const {
-  return type_names[static_cast<int>(type_)];
+const char* Token::kindName() const {
+  return kind_names[static_cast<int>(kind_)];
 }
 
 } // end namespace rvcc

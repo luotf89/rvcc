@@ -1,6 +1,7 @@
 #include "ast.h"
 #include "codegen.h"
 #include "logger.h"
+#include "type.h"
 #include "utils.h"
 #include "instructions.h"
 #include <cassert>
@@ -14,7 +15,7 @@ namespace rvcc {
 
 std::atomic_int Expr::g_id = 0;
 
-const char* Expr::type_names[static_cast<int>(ExprType::NODE_COUNT)] {
+const char* Expr::kind_names[static_cast<int>(ExprKind::NODE_COUNT)] {
   // 叶子节点
   "NODE_NUM",
   "NODE_ID",
@@ -68,12 +69,12 @@ int& Var::offset() {
 }
 
 Expr::Expr() {
-  type_ = ExprType::NODE_ILLEGAL;
+  kind_ = ExprKind::NODE_ILLEGAL;
   id_ = g_id;
   g_id++;
 }
 
-Expr::Expr(ExprType type):type_(type) {
+Expr::Expr(ExprKind kind):kind_(kind) {
   id_ = g_id;
   g_id++;
 }
@@ -114,19 +115,23 @@ Expr* Expr::getInc() {
   return nullptr;
 }
 
+Type* Expr::getType() {
+  return nullptr;
+}
+
 int& Expr::id() {
   return id_;
 }
 
-ExprType& Expr::type() {
-  return type_;
+ExprKind& Expr::kind() {
+  return kind_;
 }
 
-const char* Expr::getTypeName() const {
-  return type_names[static_cast<int>(type_)];
+const char* Expr::kindName() const {
+  return kind_names[static_cast<int>(kind_)];
 }
 
-NextExpr::NextExpr(ExprType type, Expr* next):Expr(type), next_(next) {
+NextExpr::NextExpr(ExprKind kind, Expr* next):Expr(kind), next_(next) {
   return_flag_ = false;
 }
 
@@ -145,8 +150,8 @@ bool& NextExpr::returnFlag() {
   return return_flag_;
 }
 
-BinaryExpr::BinaryExpr(ExprType type, Expr* left, Expr* right):
-  Expr(type), left_(left), right_(right) {
+BinaryExpr::BinaryExpr(ExprKind kind, Expr* left, Expr* right):
+  Expr(kind), left_(left), right_(right) {
   value_ = 0;
 }
 
@@ -158,42 +163,50 @@ Expr* BinaryExpr::getRight() {
   return right_;
 }
 
+Type* BinaryExpr::getType() {
+  return type();
+}
+
+Type*& BinaryExpr::type() {
+  return type_;
+}
+
 void BinaryExpr::codegen() {
   int offset = 0;
-  switch (type()) {
-  case ExprType::NODE_ADD:
+  switch (kind()) {
+  case ExprKind::NODE_ADD:
     add_("a0", "a0", "a1");
     break;
-  case ExprType::NODE_SUB:
+  case ExprKind::NODE_SUB:
     sub_("a0", "a0", "a1");
     break;
-  case ExprType::NODE_MUL:
+  case ExprKind::NODE_MUL:
     mul_("a0", "a0", "a1");
     break;
-  case ExprType::NODE_DIV:
+  case ExprKind::NODE_DIV:
     div_("a0", "a0", "a1");
     break;
-  case ExprType::NODE_EQ:
+  case ExprKind::NODE_EQ:
     xor_("a0", "a0", "a1");
     seqz_("a0", "a0");
     break;
-  case ExprType::NODE_NE:
+  case ExprKind::NODE_NE:
     xor_("a0", "a0", "a1");
     snez_("a0", "a0");
     break;
-  case ExprType::NODE_LT:
+  case ExprKind::NODE_LT:
     slt_("a0", "a0", "a1");
     break;
-  case ExprType::NODE_LE:
+  case ExprKind::NODE_LE:
     slt_("a0", "a1", "a0");
     xori_("a0", "a0", 1);
     break;
-  case ExprType::NODE_ASSIGN:
-    if (getLeft()->type() == ExprType::NODE_ID) {
+  case ExprKind::NODE_ASSIGN:
+    if (getLeft()->kind() == ExprKind::NODE_ID) {
       walkRightImpl(getRight(), codegen_prev_func, codegen_mid_func, codegen_post_func);
       offset = -(dynamic_cast<IdentityExpr*>(getLeft())->var()->offset() + 1) * 8;
       sd_("a0", "fp", offset);
-    } else if (getLeft()->type() == ExprType::NODE_DEREF) {
+    } else if (getLeft()->kind() == ExprKind::NODE_DEREF) {
       genAddr(getLeft());
       push_("a0");
       walkRightImpl(getRight(), codegen_prev_func, codegen_mid_func, codegen_post_func);
@@ -202,7 +215,7 @@ void BinaryExpr::codegen() {
     }
     break;
   default:
-    FATAL("binary expr cant support current type: %s", getTypeName());
+    FATAL("binary expr cant support current kind: %s", kindName());
   }
 }
 
@@ -212,11 +225,15 @@ int& BinaryExpr::value() {
 
 void BinaryExpr::visualize(std::ostringstream& oss, int&ident_num) {
   ident(oss, ident_num);
-  oss << id() << " [label=\"Node " << getTypeName() << "\"," << "color=black]\n";
+  oss << id() << " [label=\"Node " << kindName()
+              << " type: " << type()->kindName() << "\","  
+              << "color=black]\n";
   ident(oss, ident_num);
-  oss << id() << " -> " << getLeft()->id() << "[label=\"left\", color=black];\n";
+  oss << id() << " -> " << getLeft()->id()
+      << "[label=\"left\", color=black];\n";
   ident(oss, ident_num);
-  oss << id() << " -> " << getRight()->id() << "[label=\"right\", color=black];\n";
+  oss << id() << " -> " << getRight()->id()
+      << "[label=\"right\", color=black];\n";
 }
 
 Expr*& BinaryExpr::left() {
@@ -232,7 +249,7 @@ UnaryExpr::UnaryExpr():Expr() {
   left_ = nullptr;
 }
 
-UnaryExpr::UnaryExpr(ExprType type, Expr* left): Expr(type), left_(left) {
+UnaryExpr::UnaryExpr(ExprKind kind, Expr* left): Expr(kind), left_(left) {
   value_ = 0;
 }
 
@@ -240,25 +257,33 @@ Expr* UnaryExpr::getLeft() {
   return left_;
 }
 
+Type* UnaryExpr::getType() {
+  return type();
+}
+
+Type*& UnaryExpr::type() {
+  return type_;
+}
+
 void UnaryExpr::codegen() {
-  switch (type()) {
-  case ExprType::NODE_NEG:
+  switch (kind()) {
+  case ExprKind::NODE_NEG:
     walkRightImpl(getLeft(), codegen_prev_func, codegen_mid_func, codegen_post_func);
     neg_("a0", "a0");
     break;
-  case ExprType::NODE_RETURN:
+  case ExprKind::NODE_RETURN:
     walkRightImpl(getLeft(), codegen_prev_func, codegen_mid_func, codegen_post_func);
     goto_return_label_();
     break;
-  case ExprType::NODE_ADDR:
+  case ExprKind::NODE_ADDR:
     genAddr(getLeft());
     break;
-  case ExprType::NODE_DEREF:
+  case ExprKind::NODE_DEREF:
     walkRightImpl(getLeft(), codegen_prev_func, codegen_mid_func, codegen_post_func);
     ld_("a0", "a0", 0);
     break;
   default:
-    ERROR("unary expr cant support current type: %s", getTypeName());
+    ERROR("unary expr cant support current kind: %s", kindName());
   }
 }
 
@@ -268,9 +293,12 @@ int& UnaryExpr::value() {
 
 void UnaryExpr::visualize(std::ostringstream& oss, int& ident_num) {
   ident(oss, ident_num);
-  oss << id() << " [label=\"Node " << getTypeName() << "\"," << "color=black]\n";
+  oss << id() << " [label=\"Node " << kindName()
+      << " type: " << type()->kindName() << "\","
+      << "color=black]\n";
   ident(oss, ident_num);
-  oss << id() << " -> " << getLeft()->id() << "[label=\"left\", color=black];\n";
+  oss << id() << " -> " << getLeft()->id() 
+      << "[label=\"left\", color=black];\n";
 }
 
 Expr*& UnaryExpr::left() {
@@ -278,8 +306,17 @@ Expr*& UnaryExpr::left() {
 }
 
 NumExpr::NumExpr(int value):
-  Expr(ExprType::NODE_NUM) {
+  Expr(ExprKind::NODE_NUM),
+  type_(Type::typeInt) {
   value_ = value;
+}
+
+Type* NumExpr::getType() {
+  return type();
+}
+
+Type*& NumExpr::type() {
+  return type_;
 }
 
 void NumExpr::codegen() {
@@ -292,11 +329,14 @@ int& NumExpr::value() {
 
 void NumExpr::visualize(std::ostringstream& oss, int& ident_num) {
   ident(oss, ident_num);
-  oss << id() << " [label=\"Node " << getTypeName() << ": " << value() << "\"," << "color=yellow]\n";
+  oss << id() << " [label=\"Node " << kindName() << ": " << value()
+      << " type: " << type()->kindName()
+      << "\"," << "color=yellow]\n";
 }
 
 IdentityExpr::IdentityExpr(Var* var):
-  Expr(ExprType::NODE_ID) {
+  Expr(ExprKind::NODE_ID),
+  type_(Type::typeInt) {
   var_ = var;
 }
 
@@ -311,6 +351,14 @@ Var*& IdentityExpr::var() {
   return var_;
 }
 
+Type* IdentityExpr::getType() {
+  return type();
+}
+
+Type*& IdentityExpr::type() {
+  return type_;
+}
+
 void IdentityExpr::codegen() {
   int  offset = -(var()->offset() + 1) * 8;
   ld_("a0", "fp", offset);
@@ -320,17 +368,20 @@ int& IdentityExpr::value() {
   return var_->value();
 }
 
-void IdentityExpr::visualize(std::ostringstream& oss, int& ident_num) {
+void IdentityExpr::visualize(std::ostringstream& oss,
+                             int& ident_num) {
   std::string name;
   for (int i = 0; i < var()->len(); i++) {
     name += *(var()->getName() + i);
   } 
   ident(oss, ident_num);
-  oss << id() << " [label=\"Node " << getTypeName() << ": " << name << "\"," << "color=yellow]\n";
+  oss << id() << " [label=\"Node " << kindName() << ": " << name
+      << " type: " << type()->kindName() 
+      << "\"," << "color=yellow]\n";
 }
 
 StmtExpr::StmtExpr(Expr* left):
-  NextExpr(ExprType::NODE_STMT) {
+  NextExpr(ExprKind::NODE_STMT) {
   left_ = left;
   value_ = 0;
 }
@@ -357,8 +408,6 @@ Expr*& StmtExpr::left() {
 void StmtExpr::codegen() {
   if (getLeft()) {
     walkRightImpl(getLeft(), codegen_prev_func, codegen_mid_func, codegen_post_func);
-  } else {
-    WARNING("current stmt is empty!");
   }
 }
 
@@ -369,7 +418,8 @@ int& StmtExpr::value() {
 void StmtExpr::visualize(std::ostringstream& oss, int& ident_num) {
 
   ident(oss, ident_num);
-  oss << id() << " [label=\"Node " << getTypeName() << "\"," << "color=red]\n";
+  oss << id() << " [label=\"Node " << kindName() 
+              << "\"," << "color=red]\n";
   auto func = [&](Expr* curr_node) {
     curr_node->visualize(oss, ident_num);
     return true;
@@ -378,13 +428,11 @@ void StmtExpr::visualize(std::ostringstream& oss, int& ident_num) {
     walkLeftImpl(getLeft(), nullptr, nullptr, func);
     ident(oss, ident_num);
     oss << id() << " -> " << getLeft()->id() << "[label=\"left\", color=black];\n";
-  } else {
-    WARNING("current stmt is empty!");
-  }  
+  }
 }
 
 CompoundStmtExpr::CompoundStmtExpr(Expr* stmts):
-  NextExpr(ExprType::NODE_COMPOUND), stmts_(stmts) {
+  NextExpr(ExprKind::NODE_COMPOUND), stmts_(stmts) {
   value_ = 0;
 }
 
@@ -426,7 +474,7 @@ int& CompoundStmtExpr::value() {
 
 void CompoundStmtExpr::visualize(std::ostringstream& oss, int& ident_num) {
   ident(oss, ident_num);
-  oss << id() << " [label=\"Node " << getTypeName() << "\"," << "color=red]\n";
+  oss << id() << " [label=\"Node " << kindName() << "\"," << "color=red]\n";
 
   if (!stmts()) {
     WARNING("current compound stmt is empty!");
@@ -449,7 +497,7 @@ void CompoundStmtExpr::visualize(std::ostringstream& oss, int& ident_num) {
 }
 
 IfExpr::IfExpr(Expr* cond, Expr* then, Expr* els):
-  NextExpr(ExprType::NODE_IF), cond_(cond), then_(then), els_(els) {
+  NextExpr(ExprKind::NODE_IF), cond_(cond), then_(then), els_(els) {
   value_ = 0;
 }
 
@@ -517,7 +565,7 @@ void IfExpr::codegen() {
 
 void IfExpr::visualize(std::ostringstream& oss, int& ident_num) {
   ident(oss, ident_num);
-  oss << id() << " [label=\"Node " << getTypeName() << "\"," << "color=red]\n";
+  oss << id() << " [label=\"Node " << kindName() << "\"," << "color=red]\n";
   auto func = [&](Expr* curr_node) {
     curr_node->visualize(oss, ident_num);
     return true;
@@ -544,7 +592,7 @@ void IfExpr::visualize(std::ostringstream& oss, int& ident_num) {
 }
 
 ForExpr::ForExpr(Expr* init, Expr* cond, Expr* inc, Expr* stmts): 
-  NextExpr(ExprType::NODE_FOR), init_(init),
+  NextExpr(ExprKind::NODE_FOR), init_(init),
   cond_(cond), inc_(inc), stmts_(stmts) {
   value_ = 0;
 }
@@ -631,7 +679,7 @@ void ForExpr::codegen() {
 
 void ForExpr::visualize(std::ostringstream& oss, int& ident_num) {
   ident(oss, ident_num);
-  oss << id() << " [label=\"Node " << getTypeName() << "\"," << "color=red]\n";
+  oss << id() << " [label=\"Node " << kindName() << "\"," << "color=red]\n";
   auto func = [&](Expr* curr_node) {
     curr_node->visualize(oss, ident_num);
     return true;
@@ -659,7 +707,7 @@ void ForExpr::visualize(std::ostringstream& oss, int& ident_num) {
 }
 
 WhileExpr::WhileExpr(Expr* cond, Expr* stmts): 
-  NextExpr(ExprType::NODE_WHILE), cond_(cond), stmts_(stmts) {
+  NextExpr(ExprKind::NODE_WHILE), cond_(cond), stmts_(stmts) {
   value_ = 0;
 }
 
@@ -715,7 +763,7 @@ void WhileExpr::codegen() {
 
 void WhileExpr::visualize(std::ostringstream& oss, int& ident_num) {
   ident(oss, ident_num);
-  oss << id() << " [label=\"Node " << getTypeName() << "\"," << "color=red]\n";
+  oss << id() << " [label=\"Node " << kindName() << "\"," << "color=red]\n";
   auto func = [&](Expr* curr_node) {
     curr_node->visualize(oss, ident_num);
     return true;

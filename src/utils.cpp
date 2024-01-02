@@ -27,39 +27,39 @@ uint32_t uniqueId() {
   return unique_id;
 }
 
-void printErrorInof(const char* type_name, const char* expect, Lexer& lexer) {
-  int pos = lexer.getCurrToken().getLoc() - lexer.getBuf() + 1;
+void printErrorInof(const char* kind_name, const char* expect, Lexer& lexer) {
+  int pos = lexer.getCurrToken().loc() - lexer.getBuf() + 1;
   FATAL("parser %s failed  expect current token is "
-        "'%s'\n %s\n%*s", type_name, expect, lexer.getBuf(), pos, "^");
+        "'%s'\n %s\n%*s", kind_name, expect, lexer.getBuf(), pos, "^");
 }
 
 bool startWithStr(const char* str, Lexer& lexer) {
-  if ((lexer.getCurrToken().getType() == TokenType::TOKEN_PUNCT || 
-       lexer.getCurrToken().getType() == TokenType::TOKEN_KEYWORD) &&
-      Lexer::startWith(lexer.getCurrToken().getLoc(), str) &&
-      lexer.getCurrToken().getLen() == strlen(str)) {
+  if ((lexer.getCurrToken().kind() == TokenKind::TOKEN_PUNCT || 
+       lexer.getCurrToken().kind() == TokenKind::TOKEN_KEYWORD) &&
+      Lexer::startWith(lexer.getCurrToken().loc(), str) &&
+      lexer.getCurrToken().len() == strlen(str)) {
     return true;
   }
   return false;
 }
 
 bool startWithStr(const char* str, Expr* expr, Lexer& lexer) {
-  if (!(lexer.getCurrToken().getType() == TokenType::TOKEN_PUNCT &&
-        Lexer::startWith(lexer.getCurrToken().getLoc(), str) &&
-        lexer.getCurrToken().getLen() == strlen(str))) {
+  if (!(lexer.getCurrToken().kind() == TokenKind::TOKEN_PUNCT &&
+        Lexer::startWith(lexer.getCurrToken().loc(), str) &&
+        lexer.getCurrToken().len() == strlen(str))) {
     assert(expr);
-    const char* type_name = expr->getTypeName();
+    const char* kind_name = expr->kindName();
     delete expr;
-    printErrorInof(type_name, str, lexer);
+    printErrorInof(kind_name, str, lexer);
   }
   return true;
 }
 
-bool startWithStr(const char* str, const char* type_name, Lexer& lexer) {
-  if (!(lexer.getCurrToken().getType() == TokenType::TOKEN_PUNCT &&
-        Lexer::startWith(lexer.getCurrToken().getLoc(), str) &&
-        lexer.getCurrToken().getLen() == strlen(str))) {
-    printErrorInof(type_name, str, lexer);
+bool startWithStr(const char* str, const char* kind_name, Lexer& lexer) {
+  if (!(lexer.getCurrToken().kind() == TokenKind::TOKEN_PUNCT &&
+        Lexer::startWith(lexer.getCurrToken().loc(), str) &&
+        lexer.getCurrToken().len() == strlen(str))) {
+    printErrorInof(kind_name, str, lexer);
   }
   return true;
 }

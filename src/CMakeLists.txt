@@ -7,6 +7,7 @@ add_library(ast SHARED
     lexer.h lexer.cpp
     parser.h parser.cpp
     ast.h ast.cpp
+    type.h type.cpp
     instructions.h instructions.cpp
     codegen.h codegen.cpp)
 

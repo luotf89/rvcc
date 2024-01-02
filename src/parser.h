@@ -28,8 +28,8 @@ namespace rvcc {
       Parser(const char* buffer):lexer_(buffer), var_idx_(0){}
       void init();
       Ast* parser_ast();
-      static Expr* binaryOp(Expr* left, Expr*right, ExprType type);
-      static Expr* unaryOp(Expr* left, ExprType type);
+      static Expr* binaryOp(Expr* left, Expr*right, ExprKind kind);
+      static Expr* unaryOp(Expr* left, ExprKind kind);
     private:
       Expr* parser_program();
       Expr* parser_compound_stmt();
