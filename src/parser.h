@@ -3,10 +3,16 @@
 
 #include "lexer.h"
 #include "ast.h"
+#include "type.h"
 #include <cstddef>
 /*
 program = "{" compound_stmt
-compound_stmt = stmt* }
+compound_stmt = (declaration | stmt)* "}"
+
+declaration = declspec (declarator ("=" expr)? ("," declarator ("=" expr)?)*)? ";"
+declspec = "int"
+declarator = "*"* ident
+
 stmt = "return" expr ";" |
        expr? ";" |
        "if" "(" expr ")" stmt ( "else" stmt )? |
@@ -33,6 +39,9 @@ namespace rvcc {
     private:
       Expr* parser_program();
       Expr* parser_compound_stmt();
+      Expr* parser_declaration();
+      Type* parser_declarator(Type* base_type);
+      Type* parser_declspec();
       Expr* parser_stmt();
       Expr* parser_expr();
       Expr* parser_assign();

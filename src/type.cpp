@@ -21,6 +21,25 @@ Type*& Type::base() {
   return base_;
 }
 
+bool Type::operator== (Type other) {
+  if (kind_ != other.kind_) {
+    return false;
+  } 
+  Type* base1 = base_;
+  Type* base2 = other.base_;
+  while (base1 || base2) {
+    if (!base1 || !base2) {
+      return false;
+    }
+    if (base1->kind_ != base2->kind_) {
+      return false;
+    }
+    base1 = base1->base_;
+    base2 = base2->base_;
+  }
+  return true;
+}
+
 const char* Type::kindName() {
   return kind_names[static_cast<int>(kind_)];
 }

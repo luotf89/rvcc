@@ -34,6 +34,7 @@ class Token {
     std::size_t& len() {
       return len_;
     }
+    const char* content();
     const char* kindName() const;
   private:
     TokenKind kind_;
@@ -41,6 +42,7 @@ class Token {
     char* loc_;
     std::size_t len_;
     static const char* kind_names[static_cast<int>(TokenKind::TOKEN_COUNT)];
+    static char buffer[128];
 };
 
 }

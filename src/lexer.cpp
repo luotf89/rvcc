@@ -11,6 +11,7 @@ const char* keywords[] {
   "else",
   "for",
   "while",
+  "int",
   nullptr
 };
 

@@ -6,10 +6,36 @@
 #include "utils.h"
 #include "token.h"
 #include <cassert>
+#include <cstddef>
 #include <cstdlib>
+#include <utility>
 
 
 using namespace rvcc;
+
+/*
+program = "{" compound_stmt
+compound_stmt = (declaration | stmt)* "}"
+
+declaration = declspec (declarator ("=" expr)? ("," declarator ("=" expr)?)*)? ";"
+declspec = "int"
+declarator = "*"* ident
+
+stmt = "return" expr ";" |
+       expr? ";" |
+       "if" "(" expr ")" stmt ( "else" stmt )? |
+       "for" "(" expr? ";" expr? ";" expr? ")" stmt |
+       "while" "(" expr ")" stmt |
+       "{" compound_stmt
+expr = assign
+assign = equality (= assign)*
+equality =  relation ("==" relation | "!=" relation)*
+relation = add ("<" add | ">" add | "<=" add | ">=" add)*
+add = mul ("+" mul | "-" mul)*
+mul = unary ("*" unary | "/" unary)*
+unary = ("+" | "-" | "*" | "&")unary | primary
+primary = val | "("expr")"
+*/
 
 Expr* Parser::binaryOp(Expr* left, Expr*right, ExprKind kind) {
   return new BinaryExpr(kind, left, right);
@@ -37,15 +63,84 @@ Expr* Parser::parser_compound_stmt() {
   while(!(startWithStr("}", lexer_) ||
           lexer_.getCurrToken().kind() == TokenKind::TOKEN_ILLEGAL ||
           lexer_.getCurrToken().kind() == TokenKind::TOKEN_EOF)) {
-    curr_stmt->next() = parser_stmt();
+    if (startWithStr("int", lexer_)) {
+      curr_stmt->next() = parser_declaration();
+    } else {
+      curr_stmt->next() = parser_stmt();
+    }
     curr_stmt = dynamic_cast<NextExpr*>(curr_stmt->getNext());
   }
-  startWithStr("}", compound_stmt, lexer_);
+  startWithStr("}", "compound", lexer_);
   lexer_.consumerToken();
   compound_stmt->stmts() = head->getNext();
   head->next() = nullptr;
   delete head;
   return compound_stmt;
+}
+
+Expr* Parser::parser_declaration() {
+  Type* base_type = parser_declspec();
+  int count = 0;
+  NextExpr* head = new StmtExpr();
+  NextExpr* curr = head;
+  while (!startWithStr(";", lexer_)) {
+    // 解析 int a, *b, c=5; 跳过第一个 ","
+    if (count > 0) {
+      if (startWithStr(",", "declaration", lexer_)) {
+        lexer_.consumerToken();
+      }
+    }
+    count++;
+    Type* type = parser_declarator(base_type);
+    if (!(lexer_.getCurrToken().kind() == TokenKind::TOKEN_ID)) {
+      printErrorInof("identify", "identify", lexer_);
+    }
+    std::size_t key = getstrHash(lexer_.getCurrToken().loc(), lexer_.getCurrToken().len());
+    if (var_maps_.count(key) != 0) {
+      FATAL("var %s is defined more than once", lexer_.getCurrToken().content());
+    }
+    Var* var = new Var(lexer_.getCurrToken().loc(), lexer_.getCurrToken().len());
+    var->type() = type;
+    var->offset() = var_idx_++;
+    CHECK(var_maps_.insert({key, var}).second);
+    lexer_.consumerToken();
+    if (startWithStr("=", lexer_)) {
+      lexer_.consumerToken();
+      Expr* left = new IdentityExpr(var);
+      static_cast<IdentityExpr*>(left)->type() = var->type();
+      Expr* right = parser_assign();
+      StmtExpr* tmp = new StmtExpr();
+      CHECK(*(left->getType()) == *(right->getType()));
+      tmp->left() = binaryOp(left, right, ExprKind::NODE_ASSIGN);
+      dynamic_cast<BinaryExpr*>(tmp->getLeft())->type() = left->getType();
+      curr->next() = tmp;
+      curr = dynamic_cast<NextExpr*>(curr->getNext());
+    }
+  }
+  CompoundStmtExpr* declare = new CompoundStmtExpr(head->getNext());
+  head->next() = nullptr;
+  delete head;
+  return declare;
+}
+
+// 返回定义指针变量的类型 例如 int **a
+Type* Parser::parser_declarator(Type* base_type) {
+  Type* curr = base_type;
+  while(startWithStr("*", lexer_)) {
+    lexer_.consumerToken();
+    curr = new Type(TypeKind::TYPE_PTR, curr);
+  }
+  return curr;
+}
+
+// 返回变量定义时 基本类型 比如 int a 的类型为 int
+Type* Parser::parser_declspec() {
+  if (startWithStr("int", lexer_)) {
+    lexer_.consumerToken();
+    return Type::typeInt;
+  }
+  printErrorInof("parser_declspec", "kind of types", lexer_);
+  return nullptr;
 }
 
 Expr* Parser::parser_stmt() {
@@ -57,7 +152,7 @@ Expr* Parser::parser_stmt() {
     dynamic_cast<StmtExpr*>(stmt)->left() =
       unaryOp(parser_expr(), ExprKind::NODE_RETURN);
     static_cast<UnaryExpr*>(stmt->getLeft())->type() = stmt->getLeft()->getLeft()->getType();
-    startWithStr(";", stmt, lexer_);
+    startWithStr(";", "return", lexer_);
     lexer_.consumerToken();
   } else if (startWithStr("{", lexer_)) {
     lexer_.consumerToken();
@@ -65,10 +160,10 @@ Expr* Parser::parser_stmt() {
   } else if (startWithStr("if", lexer_)) {
     lexer_.consumerToken();
     IfExpr* if_stmt = new IfExpr();
-    if (startWithStr("(", if_stmt, lexer_)) {
+    if (startWithStr("(", "if", lexer_)) {
       lexer_.consumerToken();
       if_stmt->cond() = parser_expr();
-      startWithStr(")", if_stmt, lexer_);
+      startWithStr(")", "if", lexer_);
       lexer_.consumerToken();
       if_stmt->then() = parser_stmt();
       if (startWithStr("else", lexer_)) {
@@ -80,22 +175,22 @@ Expr* Parser::parser_stmt() {
   } else if (startWithStr("for", lexer_)) {
     lexer_.consumerToken();
     ForExpr* for_stmt = new ForExpr();
-    if (startWithStr("(", for_stmt, lexer_)) {
+    if (startWithStr("(", "for", lexer_)) {
       lexer_.consumerToken();
       if (!startWithStr(";", lexer_)) {
         for_stmt->init() = parser_expr();
       }
-      startWithStr(";", for_stmt, lexer_);
+      startWithStr(";", "for", lexer_);
       lexer_.consumerToken();
       if (!startWithStr(";", lexer_)) {
         for_stmt->cond() = parser_expr();
       }
-      startWithStr(";", for_stmt, lexer_);
+      startWithStr(";", "for", lexer_);
       lexer_.consumerToken();
       if (!startWithStr(")", lexer_)) {
         for_stmt->inc() = parser_expr();
       }
-      startWithStr(")", for_stmt, lexer_);
+      startWithStr(")", "for", lexer_);
       lexer_.consumerToken();
       for_stmt->stmts() = parser_stmt();
     }
@@ -103,10 +198,10 @@ Expr* Parser::parser_stmt() {
   } else if (startWithStr("while", lexer_)) {
     lexer_.consumerToken();
     WhileExpr* while_stmt = new WhileExpr();
-    if (startWithStr("(", while_stmt, lexer_)) {
+    if (startWithStr("(", "while", lexer_)) {
       lexer_.consumerToken();
       while_stmt->cond() = parser_expr();
-      startWithStr(")", while_stmt, lexer_);
+      startWithStr(")", "while", lexer_);
       lexer_.consumerToken();
       while_stmt->stmts() = parser_stmt();
     }
@@ -121,7 +216,7 @@ Expr* Parser::parser_stmt() {
     stmt =  new StmtExpr;
     stmt->kind() = ExprKind::NODE_STMT;
     dynamic_cast<StmtExpr*>(stmt)->left() = parser_expr();
-    startWithStr(";", stmt, lexer_);
+    startWithStr(";", "stmt", lexer_);
     lexer_.consumerToken();
   }
   return stmt;
@@ -137,6 +232,7 @@ Expr* Parser::parser_assign() {
   while(startWithStr("=", lexer_) ) {
     lexer_.consumerToken();
     expr = binaryOp(expr, parser_assign(), ExprKind::NODE_ASSIGN);
+    CHECK(*(expr->getLeft()->getType()) == *(expr->getRight()->getType()));
     static_cast<BinaryExpr*>(expr)->type() = expr->getLeft()->getType();
   }
   return expr;
@@ -153,6 +249,7 @@ Expr* Parser::parser_equality() {
     } else {
       expr = binaryOp(expr, parser_relation(), ExprKind::NODE_NE);
     }
+    CHECK(*(expr->getLeft()->getType()) == *(expr->getRight()->getType()));
     static_cast<BinaryExpr*>(expr)->type() = expr->getLeft()->getType();
   }
   return expr;
@@ -180,6 +277,7 @@ Expr* Parser::parser_relation() {
         expr = binaryOp(expr, parser_add(), ExprKind::NODE_LE);
       }
     }
+    CHECK(*(expr->getLeft()->getType()) == *(expr->getRight()->getType()));
     static_cast<BinaryExpr*>(expr)->type() = expr->getLeft()->getType();
   }
   return expr;
@@ -193,35 +291,30 @@ Expr* Parser::parser_add() {
     lexer_.consumerToken();
     Expr* left = expr;
     Expr* right = parser_mul();
+    auto update_ptr_offset = [&]() {
+      Expr* tmpval = new NumExpr(8);
+      static_cast<NumExpr*>(tmpval)->type() = Type::typeInt;
+      right = binaryOp(right, tmpval, ExprKind::NODE_MUL);
+      static_cast<BinaryExpr*>(right)->type() = Type::typeInt;
+    };
     if (punct == '+') {
       if (left->getType()->kind()==TypeKind::TYPE_INT && right->getType()->kind() == TypeKind::TYPE_INT) {
       } else if (left->getType()->kind()==TypeKind::TYPE_PTR && right->getType()->kind() == TypeKind::TYPE_INT) {
-        Expr* tmpval = new NumExpr(8);
-        static_cast<NumExpr*>(tmpval)->type() = Type::typeInt;
-        right = binaryOp(right, tmpval, ExprKind::NODE_MUL);
-        static_cast<BinaryExpr*>(right)->type() = Type::typeInt;
+        update_ptr_offset();
       } else if (left->getType()->kind()==TypeKind::TYPE_INT && right->getType()->kind() == TypeKind::TYPE_PTR) {
-        expr = right;
-        right = left;
-        left = expr;
-        Expr* tmpval = new NumExpr(8);
-        static_cast<NumExpr*>(tmpval)->type() = Type::typeInt;
-        right = binaryOp(right, tmpval, ExprKind::NODE_MUL);
-        static_cast<BinaryExpr*>(right)->type() = Type::typeInt;
+        std::swap(left, right);
+        update_ptr_offset();
       } else {
         FATAL("operator add can't support %s + %s", left->getType()->kindName(), right->getType()->kindName());
       }
       expr = binaryOp(left, right, ExprKind::NODE_ADD);
       static_cast<BinaryExpr*>(expr)->type() = expr->getLeft()->getType();
     } else {
-      if (left->getType()->kind()==TypeKind::TYPE_INT && right->getType()->kind() == TypeKind::TYPE_INT) {
+      if ((left->getType()->kind()==TypeKind::TYPE_INT && right->getType()->kind() == TypeKind::TYPE_INT)) {
         expr = binaryOp(left, right, ExprKind::NODE_SUB);
         static_cast<BinaryExpr*>(expr)->type() = expr->getLeft()->getType();
       } else if (left->getType()->kind()==TypeKind::TYPE_PTR && right->getType()->kind() == TypeKind::TYPE_INT) {
-        Expr* tmpval = new NumExpr(8);
-        static_cast<NumExpr*>(tmpval)->type() = Type::typeInt;
-        right = binaryOp(right, tmpval, ExprKind::NODE_MUL);
-        static_cast<BinaryExpr*>(right)->type() = Type::typeInt;
+        update_ptr_offset();
         expr = binaryOp(left, right, ExprKind::NODE_SUB);
         static_cast<BinaryExpr*>(expr)->type() = expr->getLeft()->getType();
       } else if (left->getType()->kind()==TypeKind::TYPE_PTR && right->getType()->kind() == TypeKind::TYPE_PTR) {
@@ -269,6 +362,7 @@ Expr* Parser::parser_unary() {
       if (expr->getLeft()->getType()->kind() == TypeKind::TYPE_PTR) {
         static_cast<UnaryExpr*>(expr)->type() = expr->getLeft()->getType()->base();
       } else {
+        CHECK(false);
         static_cast<UnaryExpr*>(expr)->type() = Type::typeInt;
       }
     } else {
@@ -293,19 +387,18 @@ Expr* Parser::parser_primary() {
                                        lexer_.getCurrToken().len());
     Var* var = nullptr;
     if (var_maps_.count(hash_value) == 0) {
-      var = new Var(lexer_.getCurrToken().loc(), 
-                   lexer_.getCurrToken().len());
-      var->offset() = var_idx_++;
-      assert(var_maps_.insert({hash_value, var}).second);
+      FATAL("identify: %s is used before define", lexer_.getCurrToken().loc());
     } else {
       var = var_maps_[hash_value];
     }
     expr = new IdentityExpr(var);
-    static_cast<IdentityExpr*>(expr)->type() = Type::typeInt;
+    static_cast<IdentityExpr*>(expr)->type() = var->type();
     lexer_.consumerToken();
   } else {
+    startWithStr("(", "parser_primary", lexer_);
     lexer_.consumerToken();
     expr = parser_expr();
+    startWithStr(")", "parser_primary", lexer_);
     lexer_.consumerToken();
   }
   return expr;

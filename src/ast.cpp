@@ -49,8 +49,8 @@ Var::Var() {
   value_ = 0;
 }
 
-Var::Var(char* name, int len, int value): 
-  name_(name), len_(len), value_(value) {}
+Var::Var(char* name, int len, int value, Type* type): 
+  name_(name), len_(len), value_(value), type_(type) {}
 
 int& Var::len() {
   return len_;
@@ -66,6 +66,10 @@ int& Var::value() {
 
 int& Var::offset() {
   return offset_;
+}
+
+Type*& Var::type() {
+  return type_;
 }
 
 Expr::Expr() {
@@ -458,7 +462,6 @@ Expr*& CompoundStmtExpr::stmts() {
 
 void CompoundStmtExpr::codegen() {
   if (!stmts()) {
-    WARNING("current compound stmt is empty!");
     return;
   }
   Expr* curr = stmts();
@@ -475,10 +478,6 @@ int& CompoundStmtExpr::value() {
 void CompoundStmtExpr::visualize(std::ostringstream& oss, int& ident_num) {
   ident(oss, ident_num);
   oss << id() << " [label=\"Node " << kindName() << "\"," << "color=red]\n";
-
-  if (!stmts()) {
-    WARNING("current compound stmt is empty!");
-  } 
   Expr* curr = stmts();
   Expr* prev = nullptr;
   if (curr) {

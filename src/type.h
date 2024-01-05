@@ -15,6 +15,7 @@ class Type {
     Type(TypeKind kind=TypeKind::TYPE_ILLEGAL, Type* base=nullptr);
     TypeKind& kind();
     Type*& base();
+    bool operator== (Type other);
     const char* kindName();
     static Type* typeInt;
   private:

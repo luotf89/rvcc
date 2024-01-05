@@ -43,18 +43,6 @@ bool startWithStr(const char* str, Lexer& lexer) {
   return false;
 }
 
-bool startWithStr(const char* str, Expr* expr, Lexer& lexer) {
-  if (!(lexer.getCurrToken().kind() == TokenKind::TOKEN_PUNCT &&
-        Lexer::startWith(lexer.getCurrToken().loc(), str) &&
-        lexer.getCurrToken().len() == strlen(str))) {
-    assert(expr);
-    const char* kind_name = expr->kindName();
-    delete expr;
-    printErrorInof(kind_name, str, lexer);
-  }
-  return true;
-}
-
 bool startWithStr(const char* str, const char* kind_name, Lexer& lexer) {
   if (!(lexer.getCurrToken().kind() == TokenKind::TOKEN_PUNCT &&
         Lexer::startWith(lexer.getCurrToken().loc(), str) &&

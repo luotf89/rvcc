@@ -10,8 +10,8 @@ namespace rvcc {
 std::size_t getstrHash(const char* str, int len);
 void ident(std::ostringstream& oss, int& ident_num);
 uint32_t uniqueId();
+void printErrorInof(const char* kind_name, const char* expect, Lexer& lexer);
 bool startWithStr(const char* str, Lexer& lexer);
-bool startWithStr(const char* str, Expr* expr, Lexer& lexer);
 bool startWithStr(const char* str, const char* kind_name, Lexer& lexer);
 
 // 如果返回值为ture 者认为该节点为非叶子节点，

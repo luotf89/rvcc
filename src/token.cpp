@@ -1,7 +1,11 @@
 #include "token.h"
+#include <algorithm>
+#include <cstddef>
+#include <cstring>
 
 namespace rvcc {
 
+char Token::buffer[128]{0};
 
 const char* Token::kind_names[static_cast<int>(TokenKind::TOKEN_COUNT)] {
   "TOKEN_ID",
@@ -23,6 +27,12 @@ Token::Token(TokenKind kind, int val, char* loc, int len):
 
 const char* Token::kindName() const {
   return kind_names[static_cast<int>(kind_)];
+}
+
+const char* Token::content() {
+  memset(buffer, 0, 128);
+  memcpy(buffer, loc_, std::min(static_cast<std::size_t>(127), len_));
+  return buffer;
 }
 
 } // end namespace rvcc

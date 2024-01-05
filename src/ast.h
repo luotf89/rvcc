@@ -49,16 +49,18 @@ enum class ExprKind:int{
 class Var{
   public:
     Var();
-    Var(char* name, int len, int value = 0);
+    Var(char* name, int len, int value = 0, Type* type = nullptr);
     int& len();
-    const char* getName();
     int& value();
     int& offset();
+    Type*& type();
+    const char* getName();
   private:
     const char* name_; // name 共享 输入buffer 制作， 不需要释放
     int len_;
     int value_;
     int offset_; // codegen 再栈中的相对栈帧的偏移
+    Type* type_;
 };
 
 class Expr {
