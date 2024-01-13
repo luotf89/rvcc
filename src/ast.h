@@ -25,6 +25,7 @@ enum class ExprKind:int{
   NODE_NEG,             // 取反操作
   NODE_ADDR,            // 取地址 &
   NODE_DEREF,           // 解引用 *
+  NODE_CALL,
   NODE_RETURN,
   // binary op
   NODE_ADD,              // +
@@ -170,6 +171,22 @@ class IdentityExpr: public Expr {
   private:
     Var* var_;
     Type* type_;
+};
+
+class CallExpr: public Expr {
+  public:
+    CallExpr() = delete;
+    explicit CallExpr(std::string& name);
+    virtual Type* getType() override;
+    virtual void codegen() override;
+    virtual int& value() override;
+    virtual void visualize(std::ostringstream& oss, int& ident_num) override;
+    const std::string& getFuncName();
+    Type*& type();
+  private:
+    int value_;
+    Type* type_;
+    std::string func_name_;
 };
 
 class StmtExpr: public NextExpr {

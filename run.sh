@@ -6,11 +6,16 @@ ninja
 cd src
 RISCV=~/software/riscv
 
+cat <<EOF | riscv64-linux-gnu-gcc -xc -c -o tmp2.o -
+int ret3() { return 3; }
+int ret5() { return 5; }
+EOF
+
 assert() {
     expect="$1"
     input="$2"
     ./rvcc "$input" >tmp.s || exit
-    riscv64-linux-gnu-gcc -static -o tmp tmp.s
+    riscv64-linux-gnu-gcc -static -o tmp tmp.s tmp2.o
     $RISCV/bin/qemu-riscv64 -L $RISCV/sysroot ./tmp
     actual="$?"
     # 注意 shell 脚本 "[" 和 "]" 用作test 需要空格
@@ -119,6 +124,11 @@ assert 7 '{ int x=3; int y=5; *(&x-1)=7; return y; }'
 # [22] 支持int关键字
 assert 8 '{ int x, y; x=3; y=5; return x+y; }'
 assert 8 '{ int x=3, y=5; return x+y; }'
+
+# [23] 支持零参函数调用
+assert 3 '{ return ret3(); }'
+assert 5 '{ return ret5(); }'
+assert 8 '{ return ret3()+ret5(); }'
 
 # 如果运行正常未提前退出，程序将显示OK
 echo OK

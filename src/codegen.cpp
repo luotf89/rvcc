@@ -14,18 +14,21 @@ Ast*& Codegen::ast() {
 void Codegen::codegen() {
   int stack_size = ast_->root()->var_maps().size();
   start_();
+  push_("ra");
   push_("fp");
   mv_("fp", "sp");
   printf("  # sp 配分StackSize大小的栈空间\n");
   addi_("sp", "sp", -8*stack_size);
   printf("\n# =====程序主体===============\n");
   ast_->codegen();
-  if (depth != 1) {
-    FATAL("depth should be 0 but got %d", depth.load());
+  if (depth != 2) {
+    FATAL("depth should be 2 for space ra, fp"
+          "but got %d", depth.load());
   }
   return_label_();
   mv_("sp", "fp");
   pop_("fp");
+  pop_("ra");
   ret_();
 }
 

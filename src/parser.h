@@ -26,7 +26,8 @@ relation = add ("<" add | ">" add | "<=" add | ">=" add)*
 add = mul ("+" mul | "-" mul)*
 mul = unary ("*" unary | "/" unary)*
 unary = ("+" | "-" | "*" | "&")unary | primary
-primary = val | "("expr")"
+primary = num | "("expr")" | var args?
+args = "(" ")"
 */
 namespace rvcc {
   class Parser{

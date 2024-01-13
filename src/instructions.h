@@ -21,6 +21,7 @@ void li_(const char* dst, int val);
 void sd_(const char* reg, const char* addr, int offset);
 void ld_(const char* reg, const char* addr, int offset);
 void neg_(const char* dst, const char* src);
+void call_(const char* func_name);
 void ret_();
 
 void push_(const char* reg);

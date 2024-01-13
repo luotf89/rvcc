@@ -34,7 +34,8 @@ relation = add ("<" add | ">" add | "<=" add | ">=" add)*
 add = mul ("+" mul | "-" mul)*
 mul = unary ("*" unary | "/" unary)*
 unary = ("+" | "-" | "*" | "&")unary | primary
-primary = val | "("expr")"
+primary = num | "("expr")" | var args?
+args = "(" ")"
 */
 
 Expr* Parser::binaryOp(Expr* left, Expr*right, ExprKind kind) {
@@ -385,15 +386,25 @@ Expr* Parser::parser_primary() {
   } else if (lexer_.getCurrToken().kind() == TokenKind::TOKEN_ID) {
     std::size_t hash_value = getstrHash(lexer_.getCurrToken().loc(),
                                        lexer_.getCurrToken().len());
+    std::string id_name(lexer_.getCurrToken().loc(), lexer_.getCurrToken().len());
+    lexer_.consumerToken();
+    if (startWithStr("(", lexer_)) {
+      lexer_.consumerToken();
+      expr = new CallExpr(id_name);
+      if (startWithStr(")", "parser call", lexer_)){
+        lexer_.consumerToken();
+      }
+      static_cast<CallExpr*>(expr)->type() = Type::typeInt;
+      return expr;
+    }
     Var* var = nullptr;
     if (var_maps_.count(hash_value) == 0) {
-      FATAL("identify: %s is used before define", lexer_.getCurrToken().loc());
+      FATAL("identify: %s is used before define", id_name.c_str());
     } else {
       var = var_maps_[hash_value];
     }
     expr = new IdentityExpr(var);
     static_cast<IdentityExpr*>(expr)->type() = var->type();
-    lexer_.consumerToken();
   } else {
     startWithStr("(", "parser_primary", lexer_);
     lexer_.consumerToken();

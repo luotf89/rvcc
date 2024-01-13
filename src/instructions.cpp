@@ -63,6 +63,11 @@ void neg_(const char* dst, const char* src) {
     printf("  neg %s, %s\n", dst, src);
 };
 
+void call_(const char* func_name) {
+    printf("  # 调用函数%s\n", func_name);
+    printf("  call %s\n", func_name);
+};
+
 void ret_() {
     printf("  # 返回a0值给系统调用\n");
     printf("  ret\n");

@@ -23,6 +23,7 @@ const char* Expr::kind_names[static_cast<int>(ExprKind::NODE_COUNT)] {
   "NODE_NEG",
   "NODE_ADDR",
   "NODE_DEREF",
+  "NODE_CALL",
   "NODE_RETURN",
   // binary op
   "NODE_ADD",
@@ -380,6 +381,43 @@ void IdentityExpr::visualize(std::ostringstream& oss,
   } 
   ident(oss, ident_num);
   oss << id() << " [label=\"Node " << kindName() << ": " << name
+      << " type: " << type()->kindName() 
+      << "\"," << "color=yellow]\n";
+}
+
+
+
+CallExpr::CallExpr(std::string& func_name): 
+  Expr(ExprKind::NODE_CALL),
+  type_(Type::typeInt),
+  func_name_(func_name) {
+}
+
+Type* CallExpr::getType() {
+  return type();
+}
+
+Type*& CallExpr::type() {
+  return type_;
+}
+
+const std::string& CallExpr::getFuncName() {
+  return func_name_;
+}
+
+void CallExpr::codegen() {
+  call_(func_name_.c_str());
+}
+
+int& CallExpr::value() {
+  return value_;
+}
+
+void CallExpr::visualize(std::ostringstream& oss,
+                             int& ident_num) {
+
+  ident(oss, ident_num);
+  oss << id() << " [label=\"Node " << kindName() << ": " << getFuncName()
       << " type: " << type()->kindName() 
       << "\"," << "color=yellow]\n";
 }
