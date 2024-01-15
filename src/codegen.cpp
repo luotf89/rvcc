@@ -11,6 +11,20 @@ Ast*& Codegen::ast() {
   return ast_;
 }
 
+/*
+调用者：
+  非寄存器参数入栈
+  call 被调用者
+  非寄存器参数出栈
+
+被调用者：
+  ra入栈： ra是调用者调用函数的pc指针的吓一条地址
+  fp入栈： fp是 调用者的 栈帧
+  sp->fp： 设置被调用者自己的栈帧
+  开辟局部变量空间
+  执行被调用者函数体内的逻辑
+*/
+
 void Codegen::codegen() {
   int stack_size = ast_->root()->var_maps().size();
   start_();

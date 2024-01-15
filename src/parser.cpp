@@ -391,9 +391,16 @@ Expr* Parser::parser_primary() {
     if (startWithStr("(", lexer_)) {
       lexer_.consumerToken();
       expr = new CallExpr(id_name);
-      if (startWithStr(")", "parser call", lexer_)){
-        lexer_.consumerToken();
+      while(!startWithStr(")", lexer_)) {
+        static_cast<CallExpr*>(expr)->args().push_back(parser_expr());
+        if (startWithStr(",", lexer_)) {
+          lexer_.consumerToken();
+        } else {
+          assert(startWithStr(")", "parser args", lexer_));
+        }
       }
+      // else 分支确保当前的 token为 ")"
+      lexer_.consumerToken();
       static_cast<CallExpr*>(expr)->type() = Type::typeInt;
       return expr;
     }

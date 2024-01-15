@@ -13,6 +13,7 @@
 #include <map>
 #include <sstream>
 #include <string>
+#include <vector>
 
 
 namespace rvcc {
@@ -183,10 +184,12 @@ class CallExpr: public Expr {
     virtual void visualize(std::ostringstream& oss, int& ident_num) override;
     const std::string& getFuncName();
     Type*& type();
+    std::vector<Expr*>& args();
   private:
     int value_;
     Type* type_;
     std::string func_name_;
+    std::vector<Expr*> args_;
 };
 
 class StmtExpr: public NextExpr {

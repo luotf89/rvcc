@@ -5,10 +5,13 @@
 #include "utils.h"
 #include "instructions.h"
 #include <cassert>
+#include <cstddef>
 #include <cstdint>
 #include <fstream>
 #include <iostream>
 #include <sstream>
+#include <string>
+#include <vector>
 
 
 namespace rvcc {
@@ -401,11 +404,24 @@ Type*& CallExpr::type() {
   return type_;
 }
 
+std::vector<Expr*>& CallExpr::args() {
+  return args_;
+}
+
 const std::string& CallExpr::getFuncName() {
   return func_name_;
 }
 
 void CallExpr::codegen() {
+  for (int i = args_.size() - 1; i >= 0; --i) {
+    walkRightImpl(args_[i], codegen_prev_func, codegen_mid_func, codegen_post_func);
+    push_("a0");
+  }
+  for (std::size_t i = 0; i < args_.size(); i++) {
+    std::string str("a");
+    str = str + std::to_string(i);
+    pop_(str.c_str());
+  }
   call_(func_name_.c_str());
 }
 
@@ -420,6 +436,17 @@ void CallExpr::visualize(std::ostringstream& oss,
   oss << id() << " [label=\"Node " << kindName() << ": " << getFuncName()
       << " type: " << type()->kindName() 
       << "\"," << "color=yellow]\n";
+
+  auto func = [&](Expr* curr_node) {
+    curr_node->visualize(oss, ident_num);
+    return true;
+  };
+  for (std::size_t i = 0; i < args_.size(); ++i) {
+    walkLeftImpl(args_[i], nullptr, nullptr, func);
+    ident(oss, ident_num);
+    oss << id() << " -> " << args_[i]->id()
+        << "[label=\"left\", color=black];\n";
+  }
 }
 
 StmtExpr::StmtExpr(Expr* left):
