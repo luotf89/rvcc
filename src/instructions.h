@@ -26,9 +26,9 @@ void ret_();
 
 void push_(const char* reg);
 void pop_(const char* reg);
-void start_();
-void goto_return_label_();
-void return_label_();
+void start_(const char* func_name);
+void goto_return_label_(const char* func_name);
+void return_label_(const char* func_name);
 
 void goto_else_label_(const char* reg, std::uint32_t unique_id);
 void else_label_(std::uint32_t unique_id);

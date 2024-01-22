@@ -26,24 +26,41 @@ Ast*& Codegen::ast() {
 */
 
 void Codegen::codegen() {
-  int stack_size = ast_->root()->var_maps().size();
-  start_();
-  push_("ra");
-  push_("fp");
-  mv_("fp", "sp");
-  printf("  # sp 配分StackSize大小的栈空间\n");
-  addi_("sp", "sp", -8*stack_size);
-  printf("\n# =====程序主体===============\n");
-  ast_->codegen();
-  if (depth != 2) {
-    FATAL("depth should be 2 for space ra, fp"
-          "but got %d", depth.load());
+  for (auto& elem: ast_->functions()) {
+    std::string func_name(elem.second->name(), elem.second->len());
+    int stack_size = (elem.second->var_maps().size() * 8 + 16 - 1) / 16 * 16 ;
+    start_(func_name.c_str());
+    global_func_name = func_name.c_str();
+    // 栈布局
+    //-------------------------------// sp
+    //              ra
+    //-------------------------------// ra = sp-8
+    //              fp
+    //-------------------------------// fp = sp-16
+    //             变量
+    //-------------------------------// sp = sp-16-StackSize
+    //           表达式计算
+    //-------------------------------//
+
+    // Prologue, 前言
+    // 将ra寄存器压栈,保存ra的值
+    push_("ra");
+    push_("fp");
+    mv_("fp", "sp");
+    printf("  # sp 配分StackSize大小的栈空间\n");
+    addi_("sp", "sp", -stack_size);
+    printf("\n# =====程序主体===============\n");
+    elem.second->codegen();
+    if (depth != 2) {
+      FATAL("depth should be 2 for space ra, fp"
+            "but got %d", depth.load());
+    }
+    return_label_(func_name.c_str());
+    mv_("sp", "fp");
+    pop_("fp");
+    pop_("ra");
+    ret_();
   }
-  return_label_();
-  mv_("sp", "fp");
-  pop_("fp");
-  pop_("ra");
-  ret_();
 }
 
 bool codegen_prev_func(Expr* curr_node) {

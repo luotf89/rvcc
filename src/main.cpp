@@ -15,10 +15,9 @@ int main(int argc, char** argv) {
 
 
   Parser parser(argv[1]);
-  Ast* ast = parser.parser_ast();
+  Ast* ast = parser.parser_program();
   ast->visualization("graph.dot");
   Codegen* codegen = new Codegen(ast);
-  // std::cerr << codegen->compute() << std::endl;
   codegen->codegen();
 
   return 0;

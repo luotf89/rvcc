@@ -11,12 +11,15 @@
 #include <iostream>
 #include <sstream>
 #include <string>
+#include <utility>
 #include <vector>
 
 
 namespace rvcc {
 
 std::atomic_int Expr::g_id = 0;
+
+const char* global_func_name = nullptr;
 
 const char* Expr::kind_names[static_cast<int>(ExprKind::NODE_COUNT)] {
   // 叶子节点
@@ -281,7 +284,7 @@ void UnaryExpr::codegen() {
     break;
   case ExprKind::NODE_RETURN:
     walkRightImpl(getLeft(), codegen_prev_func, codegen_mid_func, codegen_post_func);
-    goto_return_label_();
+    goto_return_label_(global_func_name);
     break;
   case ExprKind::NODE_ADDR:
     genAddr(getLeft());
@@ -853,6 +856,18 @@ Expr*& Function::body() {
   return body_;
 }
 
+Type*& Function::type() {
+  return type_;
+}
+
+char*& Function::name() {
+  return name_;
+}
+
+int& Function::len() {
+  return len_;
+}
+
 std::map<std::size_t, Var*>& Function::var_maps() {
   return var_maps_;
 }
@@ -913,22 +928,35 @@ void Function::codegen() {
   };
 }
 
-Ast::Ast() {
-  root_ = nullptr;
-}
+Ast::Ast() {}
 
-Ast::Ast(Function* root): root_(root){}
+void Ast::insert(std::pair<std::size_t, Function*> elem) {
+  CHECK(functions_.insert(elem).second);
+}
 
 Ast::~Ast() {
-  delete root_;
+  for (auto elem:functions_) {
+    delete elem.second;
+  }
 }
 
-Function*& Ast::root() {
-  return root_;
+Function* Ast::entry_function() {
+  CHECK(functions_.count(entry_function_) != 0);
+  return functions_[entry_function_];
+}
+
+const std::map<std::size_t, Function*>& Ast::functions() {
+  return functions_;
+}
+
+void Ast::set_entry_point(std::size_t entry_function) {
+  entry_function_ = entry_function;
 }
 
 void Ast::codegen() {
-  root_->codegen();
+  for (auto& elem: functions_) {
+    elem.second->codegen();
+  }
 }
 
 int Ast::visualization(std::string filename) {
@@ -943,7 +971,9 @@ int Ast::visualization(std::string filename) {
   ident(oss, ident_num);
   oss << "digraph ExampleGraph {\n";
   ident_num += 4;
-  root_->visualize(oss, ident_num);
+  for (auto& elem : functions_) {
+    elem.second->visualize(oss, ident_num);
+  }
   ident_num -= 4;
   ident(oss, ident_num);
   oss << "}\n";

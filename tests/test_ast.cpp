@@ -13,7 +13,7 @@ int main(int argc, char** argv) {
   Logger::getInst().level() = Logger::LogLevel::DEBUG;
 
   Parser parser(argv[1]);
-  Ast* ast = parser.parser_ast();
+  Ast* ast = parser.parser_program();
   ast->visualization("graph.dot");
 
   return 0;

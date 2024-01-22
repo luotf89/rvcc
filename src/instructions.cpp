@@ -87,24 +87,24 @@ void pop_(const char* reg) {
     printf("  addi sp, sp, 8\n");
 };
 
-void start_() {
-    printf("# 定义全局main段\n");
-    printf(".globl main\n");
+void start_(const char* func_name) {
+    printf("# 定义全局 %s 段\n", func_name);
+    printf(".globl %s\n", func_name);
     printf("\n# =====程序开始===============\n");
-    printf("# main段标签，也是程序入口段\n");
-    printf("main:\n");
+    printf("# %s段标签，也是程序入口段\n", func_name);
+    printf("%s:\n", func_name);
 };
 
-void goto_return_label_() {
+void goto_return_label_(const char* func_name) {
     printf("# 返回语句\n");
     printf("  # 跳转到.L.return段\n");
-    printf("  j .L.return\n");
+    printf("  j .L.return.%s\n", func_name);
 }
 
-void return_label_() {
-    printf("\n# =====程序结束===============\n");
+void return_label_(const char* func_name) {
+    printf("\n# =====程序结束 %s===============\n", func_name);
     printf("# return段标签\n");
-    printf(".L.return:\n");
+    printf(".L.return.%s:\n", func_name);
 }
 
 void goto_else_label_(const char* reg, std::uint32_t unique_id) {

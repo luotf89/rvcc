@@ -6,7 +6,12 @@
 #include "type.h"
 #include <cstddef>
 /*
-program = "{" compound_stmt
+program = functionDefinition*
+functionDefinition = declspec declarator "{" compoundStmt*
+declspec = "int"
+declarator = "*"* ident typeSuffix
+typeSuffix = ("(" ")")?
+
 compound_stmt = (declaration | stmt)* "}"
 
 declaration = declspec (declarator ("=" expr)? ("," declarator ("=" expr)?)*)? ";"
@@ -33,12 +38,12 @@ namespace rvcc {
   class Parser{
     public:
       Parser(const char* buffer):lexer_(buffer), var_idx_(0){}
-      void init();
-      Ast* parser_ast();
+      Ast* parser_program();
       static Expr* binaryOp(Expr* left, Expr*right, ExprKind kind);
       static Expr* unaryOp(Expr* left, ExprKind kind);
     private:
-      Expr* parser_program();
+      void init();
+      Function* parser_function();
       Expr* parser_compound_stmt();
       Expr* parser_declaration();
       Type* parser_declarator(Type* base_type);

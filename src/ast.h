@@ -1,7 +1,6 @@
 #ifndef __AST_H
 #define __AST_H
 
-
 #include "lexer.h"
 #include "token.h"
 #include "type.h"
@@ -17,6 +16,8 @@
 
 
 namespace rvcc {
+
+extern const char* global_func_name;
 
 enum class ExprKind:int{
   //叶子节点
@@ -288,23 +289,32 @@ class Function {
     std::map<std::size_t, Var*>& var_maps();
     void visualize(std::ostringstream& oss, int& ident_num);
     void codegen();
-    Expr*& body(); 
+    Expr*& body();
+    Type*& type();
+    char*& name();
+    int& len();
   private:
     void freeNode(Expr* curr);
     Expr* body_;
+    Type* type_;
+    char* name_;
+    int len_;
     std::map<std::size_t, Var*> var_maps_;
 };
 
 class Ast{
   public:
     Ast();
-    Ast(Function* root);
     ~Ast();
-    Function*& root();
+    Function* entry_function();
+    void insert(std::pair<std::size_t, Function*> elem);
     void codegen();
     int visualization(std::string filename);
+    void set_entry_point(std::size_t entry_point);
+    const std::map<std::size_t, Function*>& functions();
   private:
-    Function* root_;
+    std::map<std::size_t, Function*> functions_;
+    std::size_t entry_function_;
 };
 
 }
