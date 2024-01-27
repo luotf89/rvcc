@@ -912,6 +912,10 @@ void Function::visualize(std::ostringstream& oss, int& ident_num) {
   };
 }
 
+std::map<std::size_t, Var*>& Function::parameters() {
+  return parameters_;
+}
+
 void Function::codegen() {
   if (!body()) {
     WARNING("curr stmt is empty, can't be computed");

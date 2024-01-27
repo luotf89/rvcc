@@ -13,6 +13,7 @@ class Codegen{
     void codegen();
   private:
     Ast* ast_;
+    static const char* arg_regs[6];
 };
 
 bool codegen_prev_func(Expr* curr_node);

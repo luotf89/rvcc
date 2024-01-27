@@ -6,11 +6,13 @@
 #include "type.h"
 #include <cstddef>
 /*
-program = functionDefinition*
-functionDefinition = declspec declarator "{" compoundStmt*
-declspec = "int"
-declarator = "*"* ident typeSuffix
-typeSuffix = ("(" ")")?
+// program = functionDefinition*
+// functionDefinition = declspec declarator "{" compoundStmt*
+// declspec = "int"
+// declarator = "*"* ident typeSuffix
+// typeSuffix = ("(" funcParams? ")")?
+// funcParams = param ("," param)*
+// param = declspec declarator
 
 compound_stmt = (declaration | stmt)* "}"
 
@@ -44,6 +46,7 @@ namespace rvcc {
     private:
       void init();
       Function* parser_function();
+      Var* parser_parameter();
       Expr* parser_compound_stmt();
       Expr* parser_declaration();
       Type* parser_declarator(Type* base_type);
@@ -58,6 +61,7 @@ namespace rvcc {
       Expr* parser_unary();
       Expr* parser_primary();
       Lexer lexer_;
+      std::map<std::size_t, Var*> parameter_maps_;
       std::map<std::size_t, Var*> var_maps_;
       int var_idx_;
   };

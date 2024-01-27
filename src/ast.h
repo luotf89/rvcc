@@ -293,12 +293,14 @@ class Function {
     Type*& type();
     char*& name();
     int& len();
+    std::map<std::size_t, Var*>& parameters();
   private:
     void freeNode(Expr* curr);
     Expr* body_;
     Type* type_;
     char* name_;
     int len_;
+    std::map<std::size_t, Var*> parameters_;
     std::map<std::size_t, Var*> var_maps_;
 };
 

@@ -14,11 +14,13 @@
 using namespace rvcc;
 
 /*
-program = functionDefinition*
-functionDefinition = declspec declarator "{" compoundStmt*
-declspec = "int"
-declarator = "*"* ident typeSuffix
-typeSuffix = ("(" ")")?
+// program = functionDefinition*
+// functionDefinition = declspec declarator "{" compoundStmt*
+// declspec = "int"
+// declarator = "*"* ident typeSuffix
+// typeSuffix = ("(" funcParams? ")")?
+// funcParams = param ("," param)*
+// param = declspec declarator
 
 declaration = declspec (declarator ("=" expr)? ("," declarator ("=" expr)?)*)? ";"
 declspec = "int"
@@ -68,6 +70,7 @@ Ast* Parser::parser_program() {
   return ast;
 }
 
+// jiang 寄存器里保存的参数 保存在栈中， 当局部变量使用
 Function* Parser::parser_function() {
   var_idx_ = 0;
   Function* func = new Function();
@@ -81,16 +84,42 @@ Function* Parser::parser_function() {
   // todo parser function parameter
   Type* func_type = new FuncType;
   dynamic_cast<FuncType*>(func_type)->ret_type() = ret_type;
-  func->type() = func_type;
   CHECK(startWithStr("(", lexer_));
   lexer_.consumerToken();
+  while (!startWithStr(")", lexer_)) {
+    Var* param = parser_parameter();
+    std::size_t hash_value = getstrHash(param->getName(), param->len());
+    CHECK(parameter_maps_.insert({hash_value, param}).second);
+    dynamic_cast<FuncType*>(func_type)->parameter_types().push_back(param->type());
+    if (startWithStr(",", lexer_)) {
+      lexer_.consumerToken();
+      continue;
+    } else {
+      CHECK(startWithStr(")", lexer_));
+    }
+  }
   CHECK(startWithStr(")", lexer_));
   lexer_.consumerToken();
   CHECK(startWithStr("{", lexer_));
   lexer_.consumerToken();
   func->body() = parser_compound_stmt();
   func->var_maps().swap(var_maps_);
+  func->parameters().swap(parameter_maps_);
+  func->type() = func_type;
   return func;
+}
+
+Var* Parser::parser_parameter() {
+  Type* base_type = parser_declspec();
+  Type* type = parser_declarator(base_type);
+  CHECK(lexer_.getCurrToken().kind() == TokenKind::TOKEN_ID);
+  Var* parameter = new Var(lexer_.getCurrToken().loc(),
+                           lexer_.getCurrToken().len());
+  lexer_.consumerToken();
+  parameter->type() = type;
+  parameter->offset() = var_idx_;
+  var_idx_++;
+  return parameter;
 }
 
 Expr* Parser::parser_compound_stmt() {
@@ -443,10 +472,15 @@ Expr* Parser::parser_primary() {
       return expr;
     }
     Var* var = nullptr;
-    if (var_maps_.count(hash_value) == 0) {
+    if (var_maps_.count(hash_value) == 0 &&
+        parameter_maps_.count(hash_value) == 0) {
       FATAL("identify: %s is used before define", id_name.c_str());
     } else {
-      var = var_maps_[hash_value];
+      if (var_maps_.count(hash_value) != 0) {
+        var = var_maps_[hash_value];
+      } else {
+        var = parameter_maps_[hash_value];
+      }
     }
     expr = new IdentityExpr(var);
     static_cast<IdentityExpr*>(expr)->type() = var->type();
