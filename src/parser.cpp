@@ -18,13 +18,12 @@ using namespace rvcc;
 // functionDefinition = declspec declarator "{" compoundStmt*
 // declspec = "int"
 // declarator = "*"* ident typeSuffix
-// typeSuffix = ("(" funcParams? ")")?
-// funcParams = param ("," param)*
-// param = declspec declarator
+// typeSuffix = ("(" parameters? | "[" num "]")?
+// parameters = (parameter ("," parameter)*)? ")"
+// parameter = declspec declarator
 
+compoundStmt = (declaration | stmt)* "}"
 declaration = declspec (declarator ("=" expr)? ("," declarator ("=" expr)?)*)? ";"
-declspec = "int"
-declarator = "*"* ident
 
 stmt = "return" expr ";" |
        expr? ";" |
@@ -39,8 +38,8 @@ relation = add ("<" add | ">" add | "<=" add | ">=" add)*
 add = mul ("+" mul | "-" mul)*
 mul = unary ("*" unary | "/" unary)*
 unary = ("+" | "-" | "*" | "&")unary | primary
-primary = num | "("expr")" | var args?
-args = "(" ")"
+primary = num | "("expr")" | var | funtioncall
+funtioncall = ident "(" (expr (, expr)*)? ")"
 */
 
 Expr* Parser::binaryOp(Expr* left, Expr*right, ExprKind kind) {
@@ -55,14 +54,15 @@ void Parser::init() {
   lexer_.init();
 }
 
+// program = functionDefinition*
 Ast* Parser::parser_program() {
   init();
   Ast* ast = new Ast();
   while(lexer_.getCurrToken().kind() != TokenKind::TOKEN_EOF) {
     Function* func = parser_function();
-    std::size_t hash_value = getstrHash(func->name(), func->len());
+    std::size_t hash_value = getstrHash(func->name(), func->name_len());
     ast->insert({hash_value, func});
-    std::string name(func->name(), func->len());
+    std::string name(func->name(), func->name_len());
     if (name == "main") {
       ast->set_entry_point(hash_value);
     }
@@ -70,38 +70,20 @@ Ast* Parser::parser_program() {
   return ast;
 }
 
-// jiang 寄存器里保存的参数 保存在栈中， 当局部变量使用
+// functionDefinition = declspec declarator "{" compoundStmt*
+// 将寄存器里保存的参数 保存在栈中， 当局部变量使用
 Function* Parser::parser_function() {
-  var_idx_ = 0;
+  var_index_ = 0;
+  var_offset_ = 0;
   Function* func = new Function();
   Type* base_type = parser_declspec();
-  Type* ret_type = parser_declarator(base_type);
-  // function name;
-  CHECK(lexer_.getCurrToken().kind() == TokenKind::TOKEN_ID);
-  func->name() = lexer_.getCurrToken().loc();
-  func->len() = lexer_.getCurrToken().len();
-  lexer_.consumerToken();
-  // todo parser function parameter
-  Type* func_type = new FuncType;
-  dynamic_cast<FuncType*>(func_type)->ret_type() = ret_type;
-  CHECK(startWithStr("(", lexer_));
-  lexer_.consumerToken();
-  while (!startWithStr(")", lexer_)) {
-    Var* param = parser_parameter();
-    std::size_t hash_value = getstrHash(param->getName(), param->len());
-    CHECK(parameter_maps_.insert({hash_value, param}).second);
-    dynamic_cast<FuncType*>(func_type)->parameter_types().push_back(param->type());
-    if (startWithStr(",", lexer_)) {
-      lexer_.consumerToken();
-      continue;
-    } else {
-      CHECK(startWithStr(")", lexer_));
-    }
-  }
-  CHECK(startWithStr(")", lexer_));
-  lexer_.consumerToken();
+  Token id;
+  Type* func_type = parser_declarator(base_type, id);
+  CHECK(func_type->kind() == TypeKind::TYPE_FUNC);
   CHECK(startWithStr("{", lexer_));
   lexer_.consumerToken();
+  func->name() = id.loc();
+  func->name_len() = id.len();
   func->body() = parser_compound_stmt();
   func->var_maps().swap(var_maps_);
   func->parameters().swap(parameter_maps_);
@@ -109,19 +91,94 @@ Function* Parser::parser_function() {
   return func;
 }
 
-Var* Parser::parser_parameter() {
-  Type* base_type = parser_declspec();
-  Type* type = parser_declarator(base_type);
-  CHECK(lexer_.getCurrToken().kind() == TokenKind::TOKEN_ID);
-  Var* parameter = new Var(lexer_.getCurrToken().loc(),
-                           lexer_.getCurrToken().len());
-  lexer_.consumerToken();
-  parameter->type() = type;
-  parameter->offset() = var_idx_;
-  var_idx_++;
-  return parameter;
+// declspec = "int"
+// 返回变量定义时 基本类型 比如 int a 的类型为 int
+Type* Parser::parser_declspec() {
+  if (startWithStr("int", lexer_)) {
+    lexer_.consumerToken();
+    return Type::typeInt;
+  }
+  printErrorInof("parser_declspec", "kind of types", lexer_);
+  return nullptr;
 }
 
+// declarator = "*"* ident typeSuffix
+Type* Parser::parser_declarator(Type* base_type, Token& id) {
+  Type* curr = base_type;
+  while(startWithStr("*", lexer_)) {
+    lexer_.consumerToken();
+    curr = new PtrType(curr);
+  }
+  CHECK(lexer_.getCurrToken().kind()==TokenKind::TOKEN_ID);
+  id = lexer_.getCurrToken();
+  lexer_.consumerToken();
+  return parser_suffix(curr, id);
+}
+
+// typeSuffix = ("(" parameters? | "[" num "]")?
+Type* Parser::parser_suffix(Type* base_type, Token& id) {
+  if (startWithStr("(", lexer_)) {
+    lexer_.consumerToken();
+    FuncType* func_type = new FuncType(id.loc(), id.len());
+    func_type->ret_type() = base_type;
+    parser_parameters(func_type);
+    return func_type;
+  } else if (startWithStr("[", lexer_)) {
+    lexer_.consumerToken();
+    CHECK(lexer_.getCurrToken().kind()==TokenKind::TOKEN_NUM);
+    std::size_t size = lexer_.getCurrToken().value();
+    lexer_.consumerToken();
+    CHECK(startWithStr("]", lexer_));
+    lexer_.consumerToken();
+    ArrayType* array_type = new ArrayType(base_type, size);
+    Var* var = new Var(id.loc(), id.len());
+    std::size_t hash_value = getstrHash(var->getName(), var->name_len());
+    CHECK(var_maps_.insert({hash_value, var}).second);
+    var->type() = array_type;
+    var->index() = var_index_;
+    var->offset() = var_offset_;
+    var_index_++;
+    var_offset_ += array_type->size();
+    return array_type;
+  } else {
+    Var* var = new Var(id.loc(), id.len());
+    std::size_t hash_value = getstrHash(var->getName(), var->name_len());
+    CHECK(var_maps_.insert({hash_value, var}).second);
+    var->type() = base_type;
+    var->index() = var_index_;
+    var->offset() = var_offset_;
+    var_index_++;
+    var_offset_ += base_type->size();
+    return base_type;
+  }
+}
+
+// parameters = (parameter ("," parameter)*)? ")"
+void Parser::parser_parameters(FuncType* func_type) {
+  if (!startWithStr(")", lexer_)) {
+    parser_parameter(func_type);
+  }
+  while (!startWithStr(")", lexer_)) {
+    CHECK(startWithStr(",", lexer_));
+    lexer_.consumerToken();
+    parser_parameter(func_type); 
+  }
+  CHECK(startWithStr(")", lexer_));
+  lexer_.consumerToken();
+}
+
+// parameter = declspec declarator
+void Parser::parser_parameter(FuncType* func_type) {
+  Type* base_type = parser_declspec();
+  Token id;
+  parser_declarator(base_type, id);
+  std::size_t hash_value = getstrHash(id.loc(), id.len());
+  CHECK(var_maps_.count(hash_value) != 0);
+  CHECK(parameter_maps_.insert({hash_value, var_maps_[hash_value]}).second);
+  func_type->parameter_types().push_back(var_maps_[hash_value]->type());
+}
+
+// compoundStmt = (declaration | stmt)* "}"
 Expr* Parser::parser_compound_stmt() {
   CompoundStmtExpr* compound_stmt = new CompoundStmtExpr();
   NextExpr* head = new StmtExpr();
@@ -144,6 +201,7 @@ Expr* Parser::parser_compound_stmt() {
   return compound_stmt;
 }
 
+// declaration = declspec (declarator ("=" expr)? ("," declarator ("=" expr)?)*)? ";"
 Expr* Parser::parser_declaration() {
   Type* base_type = parser_declspec();
   int count = 0;
@@ -157,26 +215,17 @@ Expr* Parser::parser_declaration() {
       }
     }
     count++;
-    Type* type = parser_declarator(base_type);
-    if (!(lexer_.getCurrToken().kind() == TokenKind::TOKEN_ID)) {
-      printErrorInof("identify", "identify", lexer_);
-    }
-    std::size_t key = getstrHash(lexer_.getCurrToken().loc(), lexer_.getCurrToken().len());
-    if (var_maps_.count(key) != 0) {
-      FATAL("var %s is defined more than once", lexer_.getCurrToken().content());
-    }
-    Var* var = new Var(lexer_.getCurrToken().loc(), lexer_.getCurrToken().len());
-    var->type() = type;
-    var->offset() = var_idx_++;
-    CHECK(var_maps_.insert({key, var}).second);
-    lexer_.consumerToken();
+    Token id;
+    parser_declarator(base_type, id);
+    std::size_t key = getstrHash(id.loc(), id.len());
+    CHECK(var_maps_.count(key));
+    Var* var = var_maps_[key];
     if (startWithStr("=", lexer_)) {
       lexer_.consumerToken();
       Expr* left = new IdentityExpr(var);
       static_cast<IdentityExpr*>(left)->type() = var->type();
       Expr* right = parser_assign();
       StmtExpr* tmp = new StmtExpr();
-      bool ret = left->getType()->equal(right->getType());
       CHECK(left->getType()->equal(right->getType()));
       tmp->left() = binaryOp(left, right, ExprKind::NODE_ASSIGN);
       dynamic_cast<BinaryExpr*>(tmp->getLeft())->type() = left->getType();
@@ -190,27 +239,12 @@ Expr* Parser::parser_declaration() {
   return declare;
 }
 
-// 返回定义指针变量的类型 例如 int **a
-Type* Parser::parser_declarator(Type* base_type) {
-  Type* curr = base_type;
-  while(startWithStr("*", lexer_)) {
-    lexer_.consumerToken();
-    curr = new PtrType(curr);
-
-  }
-  return curr;
-}
-
-// 返回变量定义时 基本类型 比如 int a 的类型为 int
-Type* Parser::parser_declspec() {
-  if (startWithStr("int", lexer_)) {
-    lexer_.consumerToken();
-    return Type::typeInt;
-  }
-  printErrorInof("parser_declspec", "kind of types", lexer_);
-  return nullptr;
-}
-
+// stmt = "return" expr ";" |
+//        expr? ";" |
+//        "if" "(" expr ")" stmt ( "else" stmt )? |
+//        "for" "(" expr? ";" expr? ";" expr? ")" stmt |
+//        "while" "(" expr ")" stmt |
+//        "{" compound_stmt
 Expr* Parser::parser_stmt() {
   Expr* stmt;
   
@@ -290,6 +324,7 @@ Expr* Parser::parser_stmt() {
   return stmt;
 }
 
+// expr = assign
 Expr* Parser::parser_expr() {
   Expr* expr = parser_assign();
   return expr;
@@ -306,6 +341,7 @@ Expr* Parser::parser_assign() {
   return expr;
 }
 
+// assign = equality (= assign)*
 Expr* Parser::parser_equality() {
   Expr* expr = parser_relation();
   while(startWithStr("==", lexer_) ||
@@ -323,6 +359,7 @@ Expr* Parser::parser_equality() {
   return expr;
 }
 
+// relation = add ("<" add | ">" add | "<=" add | ">=" add)*
 Expr* Parser::parser_relation() {
   Expr* expr = parser_add();
   while(startWithStr("<=", lexer_) ||
@@ -351,6 +388,7 @@ Expr* Parser::parser_relation() {
   return expr;
 }
 
+// add = mul ("+" mul | "-" mul)*
 Expr* Parser::parser_add() {
   Expr* expr = parser_mul();
   while(startWithStr("+", lexer_) || 
@@ -359,19 +397,26 @@ Expr* Parser::parser_add() {
     lexer_.consumerToken();
     Expr* left = expr;
     Expr* right = parser_mul();
-    auto update_ptr_offset = [&]() {
-      Expr* tmpval = new NumExpr(8);
+    auto update_ptr_offset = [&](Type* type) {
+      Type* base_type = type->kind()==TypeKind::TYPE_PTR ?
+        dynamic_cast<PtrType*>(type)->base_type():
+        dynamic_cast<ArrayType*>(type)->base_type();
+      Expr* tmpval = new NumExpr(base_type->size());
       static_cast<NumExpr*>(tmpval)->type() = Type::typeInt;
       right = binaryOp(right, tmpval, ExprKind::NODE_MUL);
       static_cast<BinaryExpr*>(right)->type() = Type::typeInt;
     };
     if (punct == '+') {
       if (left->getType()->kind()==TypeKind::TYPE_INT && right->getType()->kind() == TypeKind::TYPE_INT) {
-      } else if (left->getType()->kind()==TypeKind::TYPE_PTR && right->getType()->kind() == TypeKind::TYPE_INT) {
-        update_ptr_offset();
-      } else if (left->getType()->kind()==TypeKind::TYPE_INT && right->getType()->kind() == TypeKind::TYPE_PTR) {
+      } else if ((left->getType()->kind()==TypeKind::TYPE_PTR ||
+                  left->getType()->kind()==TypeKind::TYPE_ARRAY) &&
+                 right->getType()->kind() == TypeKind::TYPE_INT) {
+        update_ptr_offset(left->getType());
+      } else if (left->getType()->kind()==TypeKind::TYPE_INT &&
+                 (right->getType()->kind() == TypeKind::TYPE_PTR ||
+                  right->getType()->kind() == TypeKind::TYPE_ARRAY)) {
         std::swap(left, right);
-        update_ptr_offset();
+        update_ptr_offset(left->getType());
       } else {
         FATAL("operator add can't support %s + %s", left->getType()->kindName(), right->getType()->kindName());
       }
@@ -382,7 +427,7 @@ Expr* Parser::parser_add() {
         expr = binaryOp(left, right, ExprKind::NODE_SUB);
         static_cast<BinaryExpr*>(expr)->type() = expr->getLeft()->getType();
       } else if (left->getType()->kind()==TypeKind::TYPE_PTR && right->getType()->kind() == TypeKind::TYPE_INT) {
-        update_ptr_offset();
+        update_ptr_offset(left->getType());
         expr = binaryOp(left, right, ExprKind::NODE_SUB);
         static_cast<BinaryExpr*>(expr)->type() = expr->getLeft()->getType();
       } else if (left->getType()->kind()==TypeKind::TYPE_PTR && right->getType()->kind() == TypeKind::TYPE_PTR) {
@@ -396,6 +441,7 @@ Expr* Parser::parser_add() {
   return expr;
 }
 
+// mul = unary ("*" unary | "/" unary)*
 Expr* Parser::parser_mul() {
   Expr* expr = parser_unary();
   while(startWithStr("*", lexer_) || 
@@ -412,6 +458,7 @@ Expr* Parser::parser_mul() {
   return expr;
 }
 
+// unary = ("+" | "-" | "*" | "&")unary | primary
 Expr* Parser::parser_unary() {
   Expr* expr;
   if (startWithStr("+", lexer_) || 
@@ -427,12 +474,12 @@ Expr* Parser::parser_unary() {
       static_cast<UnaryExpr*>(expr)->type() = expr->getLeft()->getType();
     } else if (punct == '*'){
       expr = unaryOp(parser_unary(), ExprKind::NODE_DEREF);
-      if (expr->getLeft()->getType()->kind() == TypeKind::TYPE_PTR) {
-        static_cast<UnaryExpr*>(expr)->type() =
-          dynamic_cast<PtrType*>(expr->getLeft()->getType())->base_type();
-      } else {
-        CHECK(false);
-      }
+      CHECK(expr->getLeft()->getType()->kind() == TypeKind::TYPE_PTR ||
+            expr->getLeft()->getType()->kind() == TypeKind::TYPE_ARRAY)
+      static_cast<UnaryExpr*>(expr)->type() = 
+        (expr->getLeft()->getType()->kind() == TypeKind::TYPE_PTR?
+         dynamic_cast<PtrType*>(expr->getLeft()->getType())->base_type():
+         dynamic_cast<ArrayType*>(expr->getLeft()->getType())->base_type());
     } else {
       expr = unaryOp(parser_unary(), ExprKind::NODE_ADDR);
       Type* ptr = new PtrType(expr->getLeft()->getType());
@@ -444,6 +491,7 @@ Expr* Parser::parser_unary() {
   return expr;
 }
 
+// primary = num | "("expr")" | var | funtioncall
 Expr* Parser::parser_primary() {
   Expr* expr;
   if (lexer_.getCurrToken().kind() == TokenKind::TOKEN_NUM) {
@@ -451,39 +499,29 @@ Expr* Parser::parser_primary() {
     static_cast<NumExpr*>(expr)->type() = Type::typeInt;
     lexer_.consumerToken();
   } else if (lexer_.getCurrToken().kind() == TokenKind::TOKEN_ID) {
-    std::size_t hash_value = getstrHash(lexer_.getCurrToken().loc(),
-                                       lexer_.getCurrToken().len());
-    std::string id_name(lexer_.getCurrToken().loc(), lexer_.getCurrToken().len());
+    Token id = lexer_.getCurrToken();
     lexer_.consumerToken();
     if (startWithStr("(", lexer_)) {
       lexer_.consumerToken();
-      expr = new CallExpr(id_name);
-      while(!startWithStr(")", lexer_)) {
-        static_cast<CallExpr*>(expr)->args().push_back(parser_expr());
-        if (startWithStr(",", lexer_)) {
-          lexer_.consumerToken();
+      expr = parser_call(id);
+    } else {
+      std::size_t hash_value = getstrHash(id.loc(), id.len());
+      Var* var = nullptr;
+      std::string id_name(id.loc(), id.len());
+      if (var_maps_.count(hash_value) == 0 &&
+          parameter_maps_.count(hash_value) == 0) {
+        FATAL("identify: %s is used before define", id_name.c_str());
+      } else {
+        if (var_maps_.count(hash_value) != 0) {
+          var = var_maps_[hash_value];
         } else {
-          CHECK(startWithStr(")", "parser args", lexer_));
+          var = parameter_maps_[hash_value];
         }
       }
-      // else 分支确保当前的 token为 ")"
-      lexer_.consumerToken();
-      static_cast<CallExpr*>(expr)->type() = Type::typeInt;
-      return expr;
+      IdentityExpr* id_expr = new IdentityExpr(var);
+      id_expr->type() = var->type();
+      expr = id_expr;
     }
-    Var* var = nullptr;
-    if (var_maps_.count(hash_value) == 0 &&
-        parameter_maps_.count(hash_value) == 0) {
-      FATAL("identify: %s is used before define", id_name.c_str());
-    } else {
-      if (var_maps_.count(hash_value) != 0) {
-        var = var_maps_[hash_value];
-      } else {
-        var = parameter_maps_[hash_value];
-      }
-    }
-    expr = new IdentityExpr(var);
-    static_cast<IdentityExpr*>(expr)->type() = var->type();
   } else {
     startWithStr("(", "parser_primary", lexer_);
     lexer_.consumerToken();
@@ -491,5 +529,21 @@ Expr* Parser::parser_primary() {
     startWithStr(")", "parser_primary", lexer_);
     lexer_.consumerToken();
   }
+  return expr;
+}
+
+// funcall = ident "(" (expr ("," expr)*)? ")"
+Expr* Parser::parser_call(Token& id) {
+  CallExpr* expr = new CallExpr(id.loc(), id.len());
+  if (!startWithStr(")", lexer_)) {
+    expr->args().push_back(parser_expr());
+  }
+  while(!startWithStr(")", lexer_)) {
+    CHECK(startWithStr(",", lexer_));
+    lexer_.consumerToken();
+    expr->args().push_back(parser_expr());
+  }
+  lexer_.consumerToken();
+  expr->type() = Type::typeInt;
   return expr;
 }

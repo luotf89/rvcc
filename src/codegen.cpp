@@ -1,8 +1,10 @@
 #include "logger.h"
+#include "type.h"
 #include "utils.h"
 #include "codegen.h"
 #include "ast.h"
 #include "instructions.h"
+#include <cstddef>
 #include <map>
 #include <string>
 
@@ -33,11 +35,14 @@ const char* Codegen::arg_regs[6] = {
 
 void Codegen::codegen() {
   for (auto& elem: ast_->functions()) {
-    std::string func_name(elem.second->name(), elem.second->len());
+    std::string func_name(elem.second->name(), elem.second->name_len());
     CHECK(elem.second->parameters().size() <= 6);
-    int stack_size = ((elem.second->var_maps().size() + 
-                       elem.second->parameters().size()) *
-                      8 + 16 - 1) / 16 * 16 ;
+    std::size_t stack_size = 0;
+    // var_maps 包含函数参数
+    for (auto& var: elem.second->var_maps()) {
+      stack_size += var.second->type()->size();
+    }
+    stack_size = (stack_size + 16 - 1) / 16 * 16;
     start_(func_name.c_str());
     global_func_name = func_name.c_str();
     // 栈布局
@@ -60,8 +65,8 @@ void Codegen::codegen() {
     addi_("sp", "sp", -stack_size);
     printf("\n# ====== 将参数当作局部变量保存在栈空间中=====\n");
     for (auto& param: elem.second->parameters()) {
-      int offset = param.second->offset() + 1;
-      sd_(arg_regs[offset-1], "fp", -offset * 8);
+      int offset = param.second->offset() + param.second->type()->size();
+      sd_(arg_regs[param.second->index()], "fp", -offset);
     }
     printf("\n# =====程序主体=====\n");
     elem.second->codegen();
@@ -79,12 +84,12 @@ void Codegen::codegen() {
 
 bool codegen_prev_func(Expr* curr_node) {
   if (curr_node->kind() == ExprKind::NODE_NUM ||
-        curr_node->kind() == ExprKind::NODE_ID ||
-        curr_node->kind() == ExprKind::NODE_NEG ||
-        curr_node->kind() == ExprKind::NODE_ADDR ||
-        curr_node->kind() == ExprKind::NODE_DEREF ||
-        curr_node->kind() == ExprKind::NODE_RETURN ||
-        curr_node->kind() == ExprKind::NODE_ASSIGN) { 
+      curr_node->kind() == ExprKind::NODE_ID ||
+      curr_node->kind() == ExprKind::NODE_NEG ||
+      curr_node->kind() == ExprKind::NODE_ADDR ||
+      curr_node->kind() == ExprKind::NODE_DEREF ||
+      curr_node->kind() == ExprKind::NODE_RETURN ||
+      curr_node->kind() == ExprKind::NODE_ASSIGN) { 
     curr_node->codegen();
     return false;
   }
@@ -106,7 +111,7 @@ void genAddr(Expr* curr_node) {
   int offset = 0;
   switch (curr_node->kind()) {
     case ExprKind::NODE_ID:
-      offset =  -(dynamic_cast<IdentityExpr*>(curr_node)->var()->offset() + 1) * 8;
+      offset =  -(dynamic_cast<IdentityExpr*>(curr_node)->var()->offset() + curr_node->getType()->size());
       addi_("a0", "fp", offset);
       break;
     case ExprKind::NODE_DEREF:

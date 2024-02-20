@@ -1,7 +1,5 @@
 #include "type.h"
-#include "token.h"
 #include <cstddef>
-#include <iterator>
 #include <vector>
 
 namespace rvcc {
@@ -10,16 +8,21 @@ const char* Type::kind_names[static_cast<int>(TypeKind::TYPE_COUNT)] {
   "TYPE_INT",
   "TYPE_PTR",
   "TYPE_FUNC",
+  "TYPE_ARRAY",
   "TYPE_ILLEGAL"
 };
 
-static Type typeInt_static(TypeKind::TYPE_INT);
+static Type typeInt_static(TypeKind::TYPE_INT, 8);
 Type* Type::typeInt = &typeInt_static;
 
-Type::Type(TypeKind kind):kind_(kind) {}
+Type::Type(TypeKind kind, std::size_t size):kind_(kind), size_(size) {}
 
 TypeKind& Type::kind() {
   return kind_;
+}
+
+std::size_t& Type::size() {
+  return size_;
 }
 
 bool Type::equal(Type* other) {
@@ -34,7 +37,7 @@ const char* Type::kindName() {
 }
 
 PtrType::PtrType(Type* base_type):
-  Type(TypeKind::TYPE_PTR),
+  Type(TypeKind::TYPE_PTR, 8),
   base_type_(base_type) {}
 
 Type*& PtrType::base_type() {
@@ -42,9 +45,12 @@ Type*& PtrType::base_type() {
 }
 
 bool PtrType::equal(Type* other) {
-  if (other->kind() == TypeKind::TYPE_PTR) {
+  if (other->kind() == TypeKind::TYPE_PTR ||
+      other->kind() == TypeKind::TYPE_ARRAY) {
     Type* base1 = base_type();
-    Type* base2 = dynamic_cast<PtrType*>(other)->base_type();
+    Type* base2 = other->kind() == TypeKind::TYPE_PTR? 
+      dynamic_cast<PtrType*>(other)->base_type():
+      dynamic_cast<ArrayType*>(other)->base_type();
     if(base1 && base2) {
       return base1->equal(base2);
     }
@@ -61,25 +67,35 @@ void PtrType::freeImpl(Type* type) {
   if (type->kind() == TypeKind::TYPE_PTR) {
     freeImpl(dynamic_cast<PtrType*>(type)->base_type());
   }
-  // 只有ptr type 是new 出来的  基础type 是静态的
-  if (type->kind() == TypeKind::TYPE_PTR ||
-      type->kind() == TypeKind::TYPE_FUNC) {
+  // 只有ptr type 是new 出来的
+  // 基础type 比如 func_type array_type int_type调用自身的析构函数
+  if (type->kind() == TypeKind::TYPE_PTR) {
     delete type;
   } else {
     type->~Type();
+    if (type->kind() == TypeKind::TYPE_ARRAY ||
+        type->kind() == TypeKind::TYPE_FUNC) {
+      delete type;
+    }
   }
 }
 
-FuncType::FuncType():Type(TypeKind::TYPE_FUNC) {}
+FuncType::FuncType(const char* name, std::size_t name_len):
+  Type(TypeKind::TYPE_FUNC, 8),
+  name_(name), 
+  name_len_(name_len) {}
 
 FuncType::~FuncType() {
   ret_type_->~Type();
-  if (ret_type_->kind() == TypeKind::TYPE_PTR) {
+  if (ret_type_->kind() == TypeKind::TYPE_PTR ||
+      ret_type_->kind() == TypeKind::TYPE_ARRAY ||
+      ret_type_->kind() == TypeKind::TYPE_FUNC) {
     delete ret_type_;
   }
   for (std::size_t i = 0; i < parameter_types_.size(); i++) {
     parameter_types_[i]->~Type();
     if (parameter_types_[i]->kind() == TypeKind::TYPE_PTR ||
+        parameter_types_[i]->kind() == TypeKind::TYPE_ARRAY ||
         parameter_types_[i]->kind() == TypeKind::TYPE_FUNC) {
       delete parameter_types_[i];
     }
@@ -94,17 +110,65 @@ std::vector<Type*>& FuncType::parameter_types() {
   return parameter_types_;
 }
 
+const char*& FuncType::name() {
+  return name_;
+}
+
+std::size_t& FuncType::name_len() {
+  return name_len_;
+}
+
 bool FuncType::equal(Type* other) {
   if (other->kind() == TypeKind::TYPE_FUNC) {
     FuncType* tmp = dynamic_cast<FuncType*>(other);
+    if (tmp->name_ != name_ || tmp->name_len_ != name_len_) {
+      return false;
+    }
     bool flag = ret_type_->equal(tmp->ret_type());
-    if (parameter_types().size() != tmp->parameter_types().size()) {
+    if (!flag) {
+      return false;
+    }
+    if (parameter_types().size() == tmp->parameter_types().size()) {
       for (std::size_t i = 0; i < parameter_types().size(); i++) {
-        flag = flag && (parameter_types_[i]->equal(tmp->parameter_types_[i]));
+        flag = parameter_types_[i]->equal(tmp->parameter_types_[i]);
+        if (!flag) {
+          return false;
+        }
       }
-      return flag;
+      return true;
     }
     return false;
+  }
+  return false;
+}
+
+ArrayType::ArrayType(Type* base_type, std::size_t len):
+  Type(TypeKind::TYPE_ARRAY, base_type->size()*len),
+  base_type_(base_type),
+  len_(len){}
+
+ArrayType::~ArrayType() {
+  base_type_->~Type();
+  if (base_type_->kind() == TypeKind::TYPE_PTR) {
+    delete base_type_;
+  }
+}
+
+Type*& ArrayType::base_type() {
+  return base_type_;
+}
+
+std::size_t& ArrayType::len() {
+  return len_;
+}
+
+bool ArrayType::equal(Type* other) {
+  if (this == other) {
+    return true;
+  }
+  if (other->kind() == kind() &&
+      dynamic_cast<ArrayType*>(other)->len() == len()) {
+    return true;
   }
   return false;
 }

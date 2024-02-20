@@ -52,15 +52,15 @@ const char* Expr::kind_names[static_cast<int>(ExprKind::NODE_COUNT)] {
 
 Var::Var() {
   name_ = nullptr;
-  len_ = 0;
+  name_len_ = 0;
   value_ = 0;
 }
 
 Var::Var(char* name, int len, int value, Type* type): 
-  name_(name), len_(len), value_(value), type_(type) {}
+  name_(name), name_len_(len), value_(value), type_(type) {}
 
-int& Var::len() {
-  return len_;
+std::size_t& Var::name_len() {
+  return name_len_;
 }
 
 const char* Var::getName() {
@@ -69,6 +69,10 @@ const char* Var::getName() {
 
 int& Var::value() {
   return value_;
+}
+
+int& Var::index() {
+  return index_;
 }
 
 int& Var::offset() {
@@ -215,7 +219,7 @@ void BinaryExpr::codegen() {
   case ExprKind::NODE_ASSIGN:
     if (getLeft()->kind() == ExprKind::NODE_ID) {
       walkRightImpl(getRight(), codegen_prev_func, codegen_mid_func, codegen_post_func);
-      offset = -(dynamic_cast<IdentityExpr*>(getLeft())->var()->offset() + 1) * 8;
+      offset = -(dynamic_cast<IdentityExpr*>(getLeft())->var()->offset() + type()->size());
       sd_("a0", "fp", offset);
     } else if (getLeft()->kind() == ExprKind::NODE_DEREF) {
       genAddr(getLeft());
@@ -371,8 +375,12 @@ Type*& IdentityExpr::type() {
 }
 
 void IdentityExpr::codegen() {
-  int  offset = -(var()->offset() + 1) * 8;
-  ld_("a0", "fp", offset);
+  int  offset = -(var()->offset() + type()->size());
+  if (type()->kind() == TypeKind::TYPE_ARRAY) {
+    addi_("a0", "fp", offset);
+  } else {
+    ld_("a0", "fp", offset);
+  }
 }
 
 int& IdentityExpr::value() {
@@ -381,23 +389,21 @@ int& IdentityExpr::value() {
 
 void IdentityExpr::visualize(std::ostringstream& oss,
                              int& ident_num) {
-  std::string name;
-  for (int i = 0; i < var()->len(); i++) {
-    name += *(var()->getName() + i);
-  } 
+  std::string name(var()->getName(), var()->name_len()); 
   ident(oss, ident_num);
   oss << id() << " [label=\"Node " << kindName() << ": " << name
-      << " type: " << type()->kindName() 
+      << " type: " << type()->kindName()
+      << " offset: " << var()->offset()
       << "\"," << "color=yellow]\n";
 }
 
 
 
-CallExpr::CallExpr(std::string& func_name): 
+CallExpr::CallExpr(const char* func_name, std::size_t name_len): 
   Expr(ExprKind::NODE_CALL),
   type_(Type::typeInt),
-  func_name_(func_name) {
-}
+  func_name_(func_name),
+  name_len_(name_len) {}
 
 Type* CallExpr::getType() {
   return type();
@@ -411,8 +417,8 @@ std::vector<Expr*>& CallExpr::args() {
   return args_;
 }
 
-const std::string& CallExpr::getFuncName() {
-  return func_name_;
+const std::string CallExpr::getFuncName() {
+  return std::string(func_name_, name_len_);
 }
 
 void CallExpr::codegen() {
@@ -425,7 +431,8 @@ void CallExpr::codegen() {
     str = str + std::to_string(i);
     pop_(str.c_str());
   }
-  call_(func_name_.c_str());
+  std::string func_name(func_name_, name_len_);
+  call_(func_name.c_str());
 }
 
 int& CallExpr::value() {
@@ -860,12 +867,12 @@ Type*& Function::type() {
   return type_;
 }
 
-char*& Function::name() {
+const char*& Function::name() {
   return name_;
 }
 
-int& Function::len() {
-  return len_;
+std::size_t& Function::name_len() {
+  return name_len_;
 }
 
 std::map<std::size_t, Var*>& Function::var_maps() {

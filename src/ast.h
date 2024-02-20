@@ -52,16 +52,18 @@ enum class ExprKind:int{
 class Var{
   public:
     Var();
-    Var(char* name, int len, int value = 0, Type* type = nullptr);
-    int& len();
+    Var(char* name, int name_len, int value = 0, Type* type = nullptr);
     int& value();
+    int& index();
     int& offset();
     Type*& type();
     const char* getName();
+    std::size_t& name_len();
   private:
     const char* name_; // name 共享 输入buffer 制作， 不需要释放
-    int len_;
+    std::size_t name_len_;
     int value_;
+    int index_;
     int offset_; // codegen 再栈中的相对栈帧的偏移
     Type* type_;
 };
@@ -178,18 +180,19 @@ class IdentityExpr: public Expr {
 class CallExpr: public Expr {
   public:
     CallExpr() = delete;
-    explicit CallExpr(std::string& name);
+    explicit CallExpr(const char* func_name, std::size_t name_len);
     virtual Type* getType() override;
     virtual void codegen() override;
     virtual int& value() override;
     virtual void visualize(std::ostringstream& oss, int& ident_num) override;
-    const std::string& getFuncName();
+    const std::string getFuncName();
     Type*& type();
     std::vector<Expr*>& args();
   private:
     int value_;
     Type* type_;
-    std::string func_name_;
+    const char* func_name_;
+    std::size_t name_len_;
     std::vector<Expr*> args_;
 };
 
@@ -291,15 +294,15 @@ class Function {
     void codegen();
     Expr*& body();
     Type*& type();
-    char*& name();
-    int& len();
+    const char*& name();
+    std::size_t& name_len();
     std::map<std::size_t, Var*>& parameters();
   private:
     void freeNode(Expr* curr);
     Expr* body_;
     Type* type_;
-    char* name_;
-    int len_;
+    const char* name_;
+    std::size_t name_len_;
     std::map<std::size_t, Var*> parameters_;
     std::map<std::size_t, Var*> var_maps_;
 };

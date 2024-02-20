@@ -3,53 +3,26 @@
 
 #include "lexer.h"
 #include "ast.h"
+#include "token.h"
 #include "type.h"
 #include <cstddef>
-/*
-// program = functionDefinition*
-// functionDefinition = declspec declarator "{" compoundStmt*
-// declspec = "int"
-// declarator = "*"* ident typeSuffix
-// typeSuffix = ("(" funcParams? ")")?
-// funcParams = param ("," param)*
-// param = declspec declarator
 
-compound_stmt = (declaration | stmt)* "}"
-
-declaration = declspec (declarator ("=" expr)? ("," declarator ("=" expr)?)*)? ";"
-declspec = "int"
-declarator = "*"* ident
-
-stmt = "return" expr ";" |
-       expr? ";" |
-       "if" "(" expr ")" stmt ( "else" stmt )? |
-       "for" "(" expr? ";" expr? ";" expr? ")" stmt |
-       "while" "(" expr ")" stmt |
-       "{" compound_stmt
-expr = assign
-assign = equality (= assign)*
-equality =  relation ("==" relation | "!=" relation)*
-relation = add ("<" add | ">" add | "<=" add | ">=" add)*
-add = mul ("+" mul | "-" mul)*
-mul = unary ("*" unary | "/" unary)*
-unary = ("+" | "-" | "*" | "&")unary | primary
-primary = num | "("expr")" | var args?
-args = "(" ")"
-*/
 namespace rvcc {
   class Parser{
     public:
-      Parser(const char* buffer):lexer_(buffer), var_idx_(0){}
+      Parser(const char* buffer):lexer_(buffer){}
       Ast* parser_program();
       static Expr* binaryOp(Expr* left, Expr*right, ExprKind kind);
       static Expr* unaryOp(Expr* left, ExprKind kind);
     private:
       void init();
       Function* parser_function();
-      Var* parser_parameter();
+      void parser_parameters(FuncType* func_type);
+      void parser_parameter(FuncType* func_type);
       Expr* parser_compound_stmt();
       Expr* parser_declaration();
-      Type* parser_declarator(Type* base_type);
+      Type* parser_declarator(Type* base_type, Token& id);
+      Type* parser_suffix(Type* base_type, Token& id);
       Type* parser_declspec();
       Expr* parser_stmt();
       Expr* parser_expr();
@@ -60,10 +33,12 @@ namespace rvcc {
       Expr* parser_mul();
       Expr* parser_unary();
       Expr* parser_primary();
+      Expr* parser_call(Token& id);
       Lexer lexer_;
       std::map<std::size_t, Var*> parameter_maps_;
       std::map<std::size_t, Var*> var_maps_;
-      int var_idx_;
+      int var_index_;
+      int var_offset_;
   };
 }
 #endif
