@@ -295,7 +295,7 @@ void UnaryExpr::codegen() {
     break;
   case ExprKind::NODE_DEREF:
     walkRightImpl(getLeft(), codegen_prev_func, codegen_mid_func, codegen_post_func);
-    ld_("a0", "a0", 0);
+    load(type());
     break;
   default:
     ERROR("unary expr cant support current kind: %s", kindName());
@@ -375,12 +375,11 @@ Type*& IdentityExpr::type() {
 }
 
 void IdentityExpr::codegen() {
-  int  offset = -(var()->offset() + type()->size());
+  genAddr(this);
   if (type()->kind() == TypeKind::TYPE_ARRAY) {
-    addi_("a0", "fp", offset);
-  } else {
-    ld_("a0", "fp", offset);
+    return;
   }
+  load(type());
 }
 
 int& IdentityExpr::value() {

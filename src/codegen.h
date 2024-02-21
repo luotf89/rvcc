@@ -20,6 +20,7 @@ bool codegen_prev_func(Expr* curr_node);
 bool codegen_mid_func(Expr* curr_node);
 bool codegen_post_func(Expr* curr_node);
 void genAddr(Expr* curr_node);
+void load(Type* type);
 
 } // end namespace rvcc
 

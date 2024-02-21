@@ -122,4 +122,11 @@ void genAddr(Expr* curr_node) {
   }
 }
 
+void load(Type* type) {
+  if (type->kind() == TypeKind::TYPE_ARRAY) {
+    return;
+  }
+  ld_("a0", "a0", 0);
+}
+
 }

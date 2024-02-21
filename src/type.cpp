@@ -45,12 +45,20 @@ Type*& PtrType::base_type() {
 }
 
 bool PtrType::equal(Type* other) {
-  if (other->kind() == TypeKind::TYPE_PTR ||
-      other->kind() == TypeKind::TYPE_ARRAY) {
+  if (other->kind() == TypeKind::TYPE_PTR) {
     Type* base1 = base_type();
-    Type* base2 = other->kind() == TypeKind::TYPE_PTR? 
-      dynamic_cast<PtrType*>(other)->base_type():
-      dynamic_cast<ArrayType*>(other)->base_type();
+    Type* base2 = dynamic_cast<PtrType*>(other)->base_type();
+    if(base1 && base2) {
+      return base1->equal(base2);
+    }
+    return false;
+  } else if (other->kind() == TypeKind::TYPE_ARRAY) {
+    Type* base1 = base_type();
+    Type* tmp = other;
+    while (dynamic_cast<ArrayType*>(tmp)->base_type()->kind() == TypeKind::TYPE_ARRAY) {
+      tmp = dynamic_cast<ArrayType*>(tmp)->base_type();
+    }
+    Type* base2 = dynamic_cast<ArrayType*>(tmp)->base_type();
     if(base1 && base2) {
       return base1->equal(base2);
     }

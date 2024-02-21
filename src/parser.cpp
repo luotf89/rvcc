@@ -112,7 +112,18 @@ Type* Parser::parser_declarator(Type* base_type, Token& id) {
   CHECK(lexer_.getCurrToken().kind()==TokenKind::TOKEN_ID);
   id = lexer_.getCurrToken();
   lexer_.consumerToken();
-  return parser_suffix(curr, id);
+  Type* type = parser_suffix(curr, id);
+  if (type->kind() != TypeKind::TYPE_FUNC) {
+    Var* var = new Var(id.loc(), id.len());
+    std::size_t hash_value = getstrHash(var->getName(), var->name_len());
+    CHECK(var_maps_.insert({hash_value, var}).second);
+    var->type() = type;
+    var->index() = var_index_;
+    var->offset() = var_offset_;
+    var_index_++;
+    var_offset_ += type->size();
+  }
+  return type;
 }
 
 // typeSuffix = ("(" parameters? | "[" num "]")?
@@ -130,25 +141,12 @@ Type* Parser::parser_suffix(Type* base_type, Token& id) {
     lexer_.consumerToken();
     CHECK(startWithStr("]", lexer_));
     lexer_.consumerToken();
-    ArrayType* array_type = new ArrayType(base_type, size);
-    Var* var = new Var(id.loc(), id.len());
-    std::size_t hash_value = getstrHash(var->getName(), var->name_len());
-    CHECK(var_maps_.insert({hash_value, var}).second);
-    var->type() = array_type;
-    var->index() = var_index_;
-    var->offset() = var_offset_;
-    var_index_++;
-    var_offset_ += array_type->size();
-    return array_type;
+    if (startWithStr("[", lexer_)) {
+      base_type = parser_suffix(base_type, id);
+    }
+    base_type = new ArrayType(base_type, size);
+    return base_type;
   } else {
-    Var* var = new Var(id.loc(), id.len());
-    std::size_t hash_value = getstrHash(var->getName(), var->name_len());
-    CHECK(var_maps_.insert({hash_value, var}).second);
-    var->type() = base_type;
-    var->index() = var_index_;
-    var->offset() = var_offset_;
-    var_index_++;
-    var_offset_ += base_type->size();
     return base_type;
   }
 }
