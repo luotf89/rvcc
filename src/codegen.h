@@ -2,11 +2,12 @@
 #define __CODEGEN_H
 
 #include "ast.h"
+#include "object.h"
 
 namespace rvcc {
 
 
-class Codegen{
+class Codegen: public Object{
   public:
     explicit Codegen(Ast* ast): ast_(ast) {}
     Ast*& ast();

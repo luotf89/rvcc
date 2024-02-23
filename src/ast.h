@@ -2,6 +2,7 @@
 #define __AST_H
 
 #include "lexer.h"
+#include "object.h"
 #include "token.h"
 #include "type.h"
 #include <atomic>
@@ -49,7 +50,7 @@ enum class ExprKind:int{
   NODE_COUNT
 };
 
-class Var{
+class Var: public Object{
   public:
     Var();
     Var(char* name, int name_len, int value = 0, Type* type = nullptr);
@@ -68,7 +69,7 @@ class Var{
     Type* type_;
 };
 
-class Expr {
+class Expr: public Object {
   public:
     explicit Expr(ExprKind kind);
     Expr();
@@ -100,7 +101,7 @@ class Expr {
 NextExpr 作为 stmt的基类， 提供next方法，和return flag 方法
 stmt的种类包括 单语句 复合语句 if-else for call 等等
 */
-class NextExpr : public Expr {
+class NextExpr: public Expr {
   public:
     NextExpr(ExprKind kind, Expr* next=nullptr);
     Expr * getNext() override;
@@ -284,7 +285,7 @@ class WhileExpr: public NextExpr {
     int value_;
 };
 
-class Function {
+class Function: public Object {
   public:
     Function();
     Function(Expr* body, std::map<std::size_t, Var*>&& var_maps);
@@ -307,7 +308,7 @@ class Function {
     std::map<std::size_t, Var*> var_maps_;
 };
 
-class Ast{
+class Ast: public Object{
   public:
     Ast();
     ~Ast();

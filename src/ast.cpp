@@ -355,12 +355,7 @@ IdentityExpr::IdentityExpr(Var* var):
   var_ = var;
 }
 
-IdentityExpr::~IdentityExpr() {
-  if (var()) {
-    delete var_;
-    var_ = nullptr;
-  }
-}
+IdentityExpr::~IdentityExpr() {}
 
 Var*& IdentityExpr::var() {
   return var_;
@@ -464,16 +459,7 @@ StmtExpr::StmtExpr(Expr* left):
   value_ = 0;
 }
 
-StmtExpr::~StmtExpr() {
-  assert(!getRight());
-  auto func = [](Expr* curr_node) {
-    delete curr_node;
-    return true;
-  };
-  if (getLeft()){
-    walkLeftImpl(getLeft(), nullptr, nullptr, func);
-  }
-}
+StmtExpr::~StmtExpr() {}
 
 Expr* StmtExpr::getLeft() {
   return left_;
@@ -514,17 +500,7 @@ CompoundStmtExpr::CompoundStmtExpr(Expr* stmts):
   value_ = 0;
 }
 
-CompoundStmtExpr::~CompoundStmtExpr() {
-  Expr* curr = getStmts();
-  Expr* prev = nullptr;
-  while (curr) {
-    if (prev) {
-      delete prev;
-    }
-    prev = curr;
-    curr = curr->getNext();
-  } 
-}
+CompoundStmtExpr::~CompoundStmtExpr() {}
 
 Expr* CompoundStmtExpr::getStmts() {
   return stmts_;
@@ -574,21 +550,7 @@ IfExpr::IfExpr(Expr* cond, Expr* then, Expr* els):
   value_ = 0;
 }
 
-IfExpr::~IfExpr() {
-  auto func = [&](Expr* curr_node) {
-    delete curr_node;
-    return true;
-  };
-  if (getCond()) {
-    walkLeftImpl(getCond(), nullptr, nullptr, func);
-  }
-  if (getThen()) {
-    delete then_;
-  }
-  if (getEls()) {
-    delete els_;
-  }
-}
+IfExpr::~IfExpr() {}
 
 Expr* IfExpr::getCond() {
   return cond_;
@@ -670,24 +632,7 @@ ForExpr::ForExpr(Expr* init, Expr* cond, Expr* inc, Expr* stmts):
   value_ = 0;
 }
 
-ForExpr::~ForExpr() {
-  auto func = [&](Expr* curr_node) {
-    delete  curr_node;
-    return true;
-  };
-  if (getInit()) {
-    walkLeftImpl(getInit(), nullptr, nullptr, func);
-  }
-  if (getCond()) {
-    walkLeftImpl(getCond(), nullptr, nullptr, func);
-  }
-  if (getInc()) {
-    walkLeftImpl(getInc(), nullptr, nullptr, func);
-  }
-  if (getStmts()) {
-    delete stmts_;
-  }
-}
+ForExpr::~ForExpr() {}
 
 Expr* ForExpr::getStmts() {
   return stmts_;
@@ -784,18 +729,7 @@ WhileExpr::WhileExpr(Expr* cond, Expr* stmts):
   value_ = 0;
 }
 
-WhileExpr::~WhileExpr() {
-  auto func = [&](Expr* curr_node) {
-    delete curr_node;
-    return true;
-  };
-  if (getCond()) {
-    walkLeftImpl(getCond(), nullptr, nullptr, func);
-  }
-  if (getStmts()) {
-    delete stmts_;
-  }
-}
+WhileExpr::~WhileExpr() {}
 
 Expr* WhileExpr::getStmts() {
   return stmts_;
@@ -882,20 +816,7 @@ Function::Function(Expr* body, std::map<std::size_t,
   Var*>&& var_maps):body_(body), var_maps_(std::move(var_maps)) {}
 
 
-Function::~Function() {
-  if (body()->getNext()) {
-    WARNING("curr funtion has more than one top compound stmt");
-  }
-  Expr* curr = body();
-  Expr* prev = nullptr;
-  while (curr) {
-    if (prev) {
-      delete prev;
-    }
-    prev = curr;
-    curr = curr->getNext();
-  }
-}
+Function::~Function() {}
 
 void Function::visualize(std::ostringstream& oss, int& ident_num) {
   if (!body()) {
@@ -944,11 +865,7 @@ void Ast::insert(std::pair<std::size_t, Function*> elem) {
   CHECK(functions_.insert(elem).second);
 }
 
-Ast::~Ast() {
-  for (auto elem:functions_) {
-    delete elem.second;
-  }
-}
+Ast::~Ast() {}
 
 Function* Ast::entry_function() {
   CHECK(functions_.count(entry_function_) != 0);

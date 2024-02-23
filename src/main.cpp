@@ -17,8 +17,8 @@ int main(int argc, char** argv) {
   Parser parser(argv[1]);
   Ast* ast = parser.parser_program();
   ast->visualization("graph.dot");
-  Codegen* codegen = new Codegen(ast);
-  codegen->codegen();
+  Codegen codegen(ast);
+  codegen.codegen();
 
   return 0;
 }

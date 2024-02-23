@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.27.2)
 project(rvcc VERSION 0.1.0 LANGUAGES CXX)
 
 set(CMAKE_BUILD_TYPE Debug)
+set(CMAKE_CXX_COMPILER clang++)
 
 add_subdirectory(src)
 add_subdirectory(tests)

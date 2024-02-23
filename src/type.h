@@ -1,6 +1,7 @@
 #ifndef __TYPE_H
 #define __TYPE_H
 
+#include "object.h"
 #include "token.h"
 #include <cstddef>
 #include <vector>
@@ -16,7 +17,7 @@ enum class TypeKind:int{
   TYPE_COUNT
 };
 
-class Type {
+class Type:public Object {
   public:
     Type(TypeKind kind=TypeKind::TYPE_ILLEGAL, std::size_t size=0);
     TypeKind& kind();
@@ -38,7 +39,6 @@ class PtrType: public Type {
     Type*& base_type();
     virtual bool equal(Type* other) override;
   private:
-    void freeImpl(Type* type);
     Type* base_type_;
 };
 

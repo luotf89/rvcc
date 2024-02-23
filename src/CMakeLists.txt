@@ -1,4 +1,4 @@
-list(APPEND CFLAGS "-Wall")
+list(APPEND CXXFLAGS "-Wall" "-fsanitize=address")
 
 add_library(ast SHARED
     logger.h logger.cpp

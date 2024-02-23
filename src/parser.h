@@ -14,6 +14,9 @@ namespace rvcc {
       Ast* parser_program();
       static Expr* binaryOp(Expr* left, Expr*right, ExprKind kind);
       static Expr* unaryOp(Expr* left, ExprKind kind);
+      static Expr* newAdd(Expr* left, Expr* right);
+      static Expr* newSub(Expr* left, Expr* right);
+      static void updatePtrOffset(Expr*& left, Expr*& right);
     private:
       void init();
       Function* parser_function();
@@ -32,6 +35,7 @@ namespace rvcc {
       Expr* parser_add();
       Expr* parser_mul();
       Expr* parser_unary();
+      Expr* parser_postfix();
       Expr* parser_primary();
       Expr* parser_call(Token& id);
       Lexer lexer_;

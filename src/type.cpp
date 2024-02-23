@@ -1,4 +1,5 @@
 #include "type.h"
+#include "object_manager.h"
 #include <cstddef>
 #include <vector>
 
@@ -12,8 +13,7 @@ const char* Type::kind_names[static_cast<int>(TypeKind::TYPE_COUNT)] {
   "TYPE_ILLEGAL"
 };
 
-static Type typeInt_static(TypeKind::TYPE_INT, 8);
-Type* Type::typeInt = &typeInt_static;
+Type* Type::typeInt = ObjectManager::getInst().alloc_type<Type>(TypeKind::TYPE_INT, 8);
 
 Type::Type(TypeKind kind, std::size_t size):kind_(kind), size_(size) {}
 
@@ -67,48 +67,14 @@ bool PtrType::equal(Type* other) {
   return false;
 }
 
-PtrType::~PtrType() {
-  freeImpl(base_type_);
-}
-
-void PtrType::freeImpl(Type* type) {
-  if (type->kind() == TypeKind::TYPE_PTR) {
-    freeImpl(dynamic_cast<PtrType*>(type)->base_type());
-  }
-  // 只有ptr type 是new 出来的
-  // 基础type 比如 func_type array_type int_type调用自身的析构函数
-  if (type->kind() == TypeKind::TYPE_PTR) {
-    delete type;
-  } else {
-    type->~Type();
-    if (type->kind() == TypeKind::TYPE_ARRAY ||
-        type->kind() == TypeKind::TYPE_FUNC) {
-      delete type;
-    }
-  }
-}
+PtrType::~PtrType() {}
 
 FuncType::FuncType(const char* name, std::size_t name_len):
   Type(TypeKind::TYPE_FUNC, 8),
   name_(name), 
   name_len_(name_len) {}
 
-FuncType::~FuncType() {
-  ret_type_->~Type();
-  if (ret_type_->kind() == TypeKind::TYPE_PTR ||
-      ret_type_->kind() == TypeKind::TYPE_ARRAY ||
-      ret_type_->kind() == TypeKind::TYPE_FUNC) {
-    delete ret_type_;
-  }
-  for (std::size_t i = 0; i < parameter_types_.size(); i++) {
-    parameter_types_[i]->~Type();
-    if (parameter_types_[i]->kind() == TypeKind::TYPE_PTR ||
-        parameter_types_[i]->kind() == TypeKind::TYPE_ARRAY ||
-        parameter_types_[i]->kind() == TypeKind::TYPE_FUNC) {
-      delete parameter_types_[i];
-    }
-  }
-}
+FuncType::~FuncType() {}
 
 Type*& FuncType::ret_type() {
   return ret_type_;
@@ -155,12 +121,7 @@ ArrayType::ArrayType(Type* base_type, std::size_t len):
   base_type_(base_type),
   len_(len){}
 
-ArrayType::~ArrayType() {
-  base_type_->~Type();
-  if (base_type_->kind() == TypeKind::TYPE_PTR) {
-    delete base_type_;
-  }
-}
+ArrayType::~ArrayType() {}
 
 Type*& ArrayType::base_type() {
   return base_type_;
