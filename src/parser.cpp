@@ -40,7 +40,7 @@ add = mul ("+" mul | "-" mul)*
 mul = unary ("*" unary | "/" unary)*
 unary = ("+" | "-" | "*" | "&")unary | postfix
 postfix = primary ("[" expr "]")*
-primary = num | "("expr")" | var | funtioncall
+primary = num | "("expr")" | "sizeof" unary | var | funtioncall
 funtioncall = ident "(" (expr (, expr)*)? ")"
 */
 
@@ -529,7 +529,7 @@ Expr* Parser::parser_postfix() {
   return expr;
 }
 
-// primary = num | "("expr")" | var | funtioncall
+// primary = num | "("expr")" | "sizeof" unary | var | funtioncall
 Expr* Parser::parser_primary() {
   Expr* expr;
   if (lexer_.getCurrToken().kind() == TokenKind::TOKEN_NUM) {
@@ -560,6 +560,12 @@ Expr* Parser::parser_primary() {
       id_expr->type() = var->type();
       expr = id_expr;
     }
+  } else if (startWithStr("sizeof", lexer_)) {
+    lexer_.consumerToken();
+    expr = parser_unary();
+    expr = ObjectManager::getInst().alloc_type<NumExpr>(expr->getType()->size());
+    dynamic_cast<NumExpr*>(expr)->type() = Type::typeInt;
+    return expr;
   } else {
     startWithStr("(", "parser_primary", lexer_);
     lexer_.consumerToken();

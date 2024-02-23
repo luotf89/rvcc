@@ -12,6 +12,7 @@ const char* keywords[] {
   "for",
   "while",
   "int",
+  "sizeof",
   nullptr
 };
 
