@@ -90,8 +90,9 @@ void pop_(const char* reg) {
 void start_(const char* func_name) {
     printf("# 定义全局 %s 段\n", func_name);
     printf(".globl %s\n", func_name);
-    printf("\n# =====程序开始===============\n");
-    printf("# %s段标签，也是程序入口段\n", func_name);
+    printf("  .text\n");
+    printf("# ====== %s段开始 ======\n", func_name);
+    printf("# %s段标签\n", func_name);
     printf("%s:\n", func_name);
 };
 

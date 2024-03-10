@@ -19,7 +19,7 @@ namespace rvcc {
       static void updatePtrOffset(Expr*& left, Expr*& right);
     private:
       void init();
-      Function* parser_function();
+      Function* parser_function(Type* type, Token& id);
       void parser_parameters(FuncType* func_type);
       void parser_parameter(FuncType* func_type);
       Expr* parser_compound_stmt();
@@ -40,9 +40,12 @@ namespace rvcc {
       Expr* parser_call(Token& id);
       Lexer lexer_;
       std::map<std::size_t, Var*> parameter_maps_;
-      std::map<std::size_t, Var*> var_maps_;
-      int var_index_;
-      int var_offset_;
+      std::map<std::size_t, Var*> local_vars_;
+      std::map<std::size_t, Var*> global_vars_;
+      int local_var_index_;
+      int local_var_offset_;
+      int global_var_index_;
+      int global_var_offset_;
   };
 }
 #endif

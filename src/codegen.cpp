@@ -18,6 +18,21 @@ const char* Codegen::arg_regs[6] = {
   "a0", "a1", "a2", "a3", "a4", "a5"
 };
 
+void Codegen::codegen_data() {
+  for (auto elem: ast_->global_vars()) {
+    Var* var = elem.second;
+    std::string var_name(var->getName(), var->name_len());
+    CHECK(var->addr_kind() == AddrKind::ADDR_DATA);
+    printf("  # 数据段标签\n");
+    printf("  .data\n");
+    printf("  .globl %s\n", var_name.c_str());
+    printf("  # 全局变量%s\n", var_name.c_str());
+    printf("%s:\n", var_name.c_str());
+    printf("  # 零填充%lu位\n", var->type()->size());
+    printf("  .zero %lu\n", var->type()->size());
+  }
+}
+
 /*
 当前实现比较low 参数会先把 a1 - a6的值压栈作为local变量来使用
 调用者：
@@ -32,14 +47,13 @@ const char* Codegen::arg_regs[6] = {
   开辟局部变量空间
   执行被调用者函数体内的逻辑
 */
-
-void Codegen::codegen() {
+void Codegen::codegen_function() {
   for (auto& elem: ast_->functions()) {
     std::string func_name(elem.second->name(), elem.second->name_len());
     CHECK(elem.second->parameters().size() <= 6);
     std::size_t stack_size = 0;
-    // var_maps 包含函数参数
-    for (auto& var: elem.second->var_maps()) {
+    // local_vars 包含函数参数
+    for (auto& var: elem.second->local_vars()) {
       stack_size += var.second->type()->size();
     }
     stack_size = (stack_size + 16 - 1) / 16 * 16;
@@ -82,6 +96,11 @@ void Codegen::codegen() {
   }
 }
 
+void Codegen::codegen() {
+  codegen_data();
+  codegen_function();
+}
+
 bool codegen_prev_func(Expr* curr_node) {
   if (curr_node->kind() == ExprKind::NODE_NUM ||
       curr_node->kind() == ExprKind::NODE_ID ||
@@ -111,12 +130,29 @@ void genAddr(Expr* curr_node) {
   int offset = 0;
   switch (curr_node->kind()) {
     case ExprKind::NODE_ID:
-      offset =  -(dynamic_cast<IdentityExpr*>(curr_node)->var()->offset() + curr_node->getType()->size());
-      addi_("a0", "fp", offset);
-      break;
+      {
+        Var* var = dynamic_cast<IdentityExpr*>(curr_node)->var();
+        std::string var_name(var->getName(), var->name_len());
+        if (var->addr_kind() == AddrKind::ADDR_STACK) {
+          offset =  -(var->offset() + curr_node->getType()->size());
+          printf("  # 获取局部变量%s的栈内地址为%d(fp)\n", var_name.c_str(),
+              offset);
+          addi_("a0", "fp", offset);
+        } else if (var->addr_kind() == AddrKind::ADDR_DATA) {
+          printf("  # 获取全局变量%s的地址\n", var_name.c_str());
+          printf("  lui a0, %%hi(%s)\n", var_name.c_str());
+          printf("  addi a0, a0, %%lo(%s)\n", var_name.c_str());
+          // printf("  la a0, %s\n", var_name.c_str());
+        } else {
+          FATAL("current address type: %s is not support", var->getAddrKindName());
+        }
+        break;
+      }
     case ExprKind::NODE_DEREF:
-      walkRightImpl(curr_node->getLeft(), codegen_prev_func, codegen_mid_func, codegen_post_func);
-      break;
+      {
+        walkRightImpl(curr_node->getLeft(), codegen_prev_func, codegen_mid_func, codegen_post_func);
+        break;
+      }
     default:
       FATAL("node kind:  %s not support get addr", curr_node->kindName());
   }

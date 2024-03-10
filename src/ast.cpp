@@ -4,7 +4,6 @@
 #include "type.h"
 #include "utils.h"
 #include "instructions.h"
-#include <cassert>
 #include <cstddef>
 #include <cstdint>
 #include <fstream>
@@ -20,6 +19,14 @@ namespace rvcc {
 std::atomic_int Expr::g_id = 0;
 
 const char* global_func_name = nullptr;
+
+const char* Var::AddressKindNames[
+  static_cast<int>(AddrKind::ADDR_COUNT)] {
+  "ADDR_DATA",
+  "ADDR_STACK",
+  "ADDR_DATA",
+  "ADDR_ERROR",
+};
 
 const char* Expr::kind_names[static_cast<int>(ExprKind::NODE_COUNT)] {
   // 叶子节点
@@ -81,6 +88,14 @@ int& Var::offset() {
 
 Type*& Var::type() {
   return type_;
+}
+
+AddrKind& Var::addr_kind() {
+  return addr_kind_;
+}
+
+const char* Var::getAddrKindName() {
+  return AddressKindNames[static_cast<int>(addr_kind_)];
 }
 
 Expr::Expr() {
@@ -218,9 +233,11 @@ void BinaryExpr::codegen() {
     break;
   case ExprKind::NODE_ASSIGN:
     if (getLeft()->kind() == ExprKind::NODE_ID) {
+      genAddr(getLeft());
+      push_("a0");
       walkRightImpl(getRight(), codegen_prev_func, codegen_mid_func, codegen_post_func);
-      offset = -(dynamic_cast<IdentityExpr*>(getLeft())->var()->offset() + type()->size());
-      sd_("a0", "fp", offset);
+      pop_("a1");
+      sd_("a0", "a1", 0);
     } else if (getLeft()->kind() == ExprKind::NODE_DEREF) {
       genAddr(getLeft());
       push_("a0");
@@ -789,7 +806,7 @@ void WhileExpr::visualize(std::ostringstream& oss, int& ident_num) {
 
 Function::Function() {
   body_ = nullptr;
-  var_maps_.clear();
+  local_vars_.clear();
 }
 
 Expr*& Function::body() {
@@ -808,12 +825,12 @@ std::size_t& Function::name_len() {
   return name_len_;
 }
 
-std::map<std::size_t, Var*>& Function::var_maps() {
-  return var_maps_;
+std::map<std::size_t, Var*>& Function::local_vars() {
+  return local_vars_;
 }
 
 Function::Function(Expr* body, std::map<std::size_t,
-  Var*>&& var_maps):body_(body), var_maps_(std::move(var_maps)) {}
+  Var*>&& local_vars):body_(body), local_vars_(std::move(local_vars)) {}
 
 
 Function::~Function() {}
@@ -872,8 +889,12 @@ Function* Ast::entry_function() {
   return functions_[entry_function_];
 }
 
-const std::map<std::size_t, Function*>& Ast::functions() {
+std::map<std::size_t, Function*>& Ast::functions() {
   return functions_;
+}
+
+std::map<std::size_t, Var*>& Ast::global_vars() {
+  return global_vars_;
 }
 
 void Ast::set_entry_point(std::size_t entry_function) {

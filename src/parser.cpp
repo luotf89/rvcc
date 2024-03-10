@@ -15,7 +15,7 @@
 using namespace rvcc;
 
 /*
-// program = functionDefinition*
+// program = functionDefinition* | globalvar*
 // functionDefinition = declspec declarator "{" compoundStmt*
 // declspec = "int"
 // declarator = "*"* ident typeSuffix
@@ -104,6 +104,8 @@ Expr* Parser::newSub(Expr *left, Expr *right) {
 
 void Parser::init() {
   lexer_.init();
+  global_var_index_ = 0;
+  global_var_offset_ = 0;
 }
 
 // program = functionDefinition*
@@ -111,35 +113,64 @@ Ast* Parser::parser_program() {
   init();
   Ast* ast = ObjectManager::getInst().alloc_type<Ast>();
   while(lexer_.getCurrToken().kind() != TokenKind::TOKEN_EOF) {
-    Function* func = parser_function();
-    std::size_t hash_value = getstrHash(func->name(), func->name_len());
-    ast->insert({hash_value, func});
-    std::string name(func->name(), func->name_len());
-    if (name == "main") {
-      ast->set_entry_point(hash_value);
+    Token id;
+    Type* base_type = parser_declspec();
+    Type* type = parser_declarator(base_type, id);
+
+    if (startWithStr("{", lexer_)) {
+      lexer_.consumerToken();
+      Function* func = parser_function(type, id);
+      std::size_t hash_value = getstrHash(func->name(), func->name_len());
+      ast->insert({hash_value, func});
+      std::string name(func->name(), func->name_len());
+      if (name == "main") {
+        ast->set_entry_point(hash_value);
+      }
+    } else if (startWithStr(";", lexer_) ||
+               startWithStr(",", lexer_)) {
+      auto handle_global_var = [&]() {
+        lexer_.consumerToken();
+        Var* var = ObjectManager::getInst().alloc_type<Var>(id.loc(), id.len());
+        std::size_t hash_value = getstrHash(var->getName(), var->name_len());
+        CHECK(global_vars_.insert({hash_value, var}).second);
+        var->type() = type;
+        var->index() = global_var_index_;
+        var->offset() = global_var_offset_;
+        var->addr_kind() = AddrKind::ADDR_DATA;
+        global_var_index_++;
+        global_var_offset_ += type->size();
+      };
+      while(startWithStr(",", lexer_)) {
+        handle_global_var();
+        if (lexer_.getCurrToken().kind() == TokenKind::TOKEN_ID) {
+          id = lexer_.getCurrToken();
+          lexer_.consumerToken();
+        }
+      }
+      CHECK(startWithStr(";", lexer_));
+      handle_global_var();
+    } else {
+      FATAL("parser function or global var is failed");
     }
+
   }
+  ast->global_vars().swap(global_vars_);
   return ast;
 }
 
 // functionDefinition = declspec declarator "{" compoundStmt*
 // 将寄存器里保存的参数 保存在栈中， 当局部变量使用
-Function* Parser::parser_function() {
-  var_index_ = 0;
-  var_offset_ = 0;
+Function* Parser::parser_function(Type* type, Token& id) {
+  local_var_index_ = 0;
+  local_var_offset_ = 0;
+  CHECK(type->kind() == TypeKind::TYPE_FUNC);
   Function* func = ObjectManager::getInst().alloc_type<Function>();
-  Type* base_type = parser_declspec();
-  Token id;
-  Type* func_type = parser_declarator(base_type, id);
-  CHECK(func_type->kind() == TypeKind::TYPE_FUNC);
-  CHECK(startWithStr("{", lexer_));
-  lexer_.consumerToken();
   func->name() = id.loc();
   func->name_len() = id.len();
   func->body() = parser_compound_stmt();
-  func->var_maps().swap(var_maps_);
+  func->local_vars().swap(local_vars_);
   func->parameters().swap(parameter_maps_);
-  func->type() = func_type;
+  func->type() = type;
   return func;
 }
 
@@ -165,16 +196,6 @@ Type* Parser::parser_declarator(Type* base_type, Token& id) {
   id = lexer_.getCurrToken();
   lexer_.consumerToken();
   Type* type = parser_suffix(curr, id);
-  if (type->kind() != TypeKind::TYPE_FUNC) {
-    Var* var = ObjectManager::getInst().alloc_type<Var>(id.loc(), id.len());
-    std::size_t hash_value = getstrHash(var->getName(), var->name_len());
-    CHECK(var_maps_.insert({hash_value, var}).second);
-    var->type() = type;
-    var->index() = var_index_;
-    var->offset() = var_offset_;
-    var_index_++;
-    var_offset_ += type->size();
-  }
   return type;
 }
 
@@ -224,11 +245,18 @@ void Parser::parser_parameters(FuncType* func_type) {
 void Parser::parser_parameter(FuncType* func_type) {
   Type* base_type = parser_declspec();
   Token id;
-  parser_declarator(base_type, id);
-  std::size_t hash_value = getstrHash(id.loc(), id.len());
-  CHECK(var_maps_.count(hash_value) != 0);
-  CHECK(parameter_maps_.insert({hash_value, var_maps_[hash_value]}).second);
-  func_type->parameter_types().push_back(var_maps_[hash_value]->type());
+  Type* type = parser_declarator(base_type, id);
+  Var* var = ObjectManager::getInst().alloc_type<Var>(id.loc(), id.len());
+  std::size_t hash_value = getstrHash(var->getName(), var->name_len());
+  CHECK(local_vars_.insert({hash_value, var}).second);
+  var->type() = type;
+  var->index() = local_var_index_;
+  var->offset() = local_var_offset_;
+  var->addr_kind() = AddrKind::ADDR_STACK;
+  local_var_index_++;
+  local_var_offset_ += type->size();
+  CHECK(parameter_maps_.insert({hash_value, local_vars_[hash_value]}).second);
+  func_type->parameter_types().push_back(local_vars_[hash_value]->type());
 }
 
 // compoundStmt = (declaration | stmt)* "}"
@@ -269,10 +297,16 @@ Expr* Parser::parser_declaration() {
     }
     count++;
     Token id;
-    parser_declarator(base_type, id);
-    std::size_t key = getstrHash(id.loc(), id.len());
-    CHECK(var_maps_.count(key));
-    Var* var = var_maps_[key];
+    Type* type = parser_declarator(base_type, id);
+    Var* var = ObjectManager::getInst().alloc_type<Var>(id.loc(), id.len());
+    std::size_t hash_value = getstrHash(var->getName(), var->name_len());
+    CHECK(local_vars_.insert({hash_value, var}).second);
+    var->type() = type;
+    var->index() = local_var_index_;
+    var->offset() = local_var_offset_;
+    var->addr_kind() = AddrKind::ADDR_STACK;
+    local_var_index_++;
+    local_var_offset_ += type->size();
     if (startWithStr("=", lexer_)) {
       lexer_.consumerToken();
       Expr* left = ObjectManager::getInst().alloc_type<IdentityExpr>(var);
@@ -546,12 +580,15 @@ Expr* Parser::parser_primary() {
       std::size_t hash_value = getstrHash(id.loc(), id.len());
       Var* var = nullptr;
       std::string id_name(id.loc(), id.len());
-      if (var_maps_.count(hash_value) == 0 &&
+      if (local_vars_.count(hash_value) == 0 &&
+          global_vars_.count(hash_value) == 0 &&
           parameter_maps_.count(hash_value) == 0) {
         FATAL("identify: %s is used before define", id_name.c_str());
       } else {
-        if (var_maps_.count(hash_value) != 0) {
-          var = var_maps_[hash_value];
+        if (local_vars_.count(hash_value) != 0) {
+          var = local_vars_[hash_value];
+        } else if (global_vars_.count(hash_value) != 0) {
+          var = global_vars_[hash_value];
         } else {
           var = parameter_maps_[hash_value];
         }

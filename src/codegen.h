@@ -11,6 +11,8 @@ class Codegen: public Object{
   public:
     explicit Codegen(Ast* ast): ast_(ast) {}
     Ast*& ast();
+    void codegen_data();
+    void codegen_function();
     void codegen();
   private:
     Ast* ast_;

@@ -50,6 +50,14 @@ enum class ExprKind:int{
   NODE_COUNT
 };
 
+enum class AddrKind {
+  ADDR_DATA = 0,
+  ADDR_STACK,
+  ADDR_HEAP,
+  ADDR_ERROR,
+  ADDR_COUNT
+};
+
 class Var: public Object{
   public:
     Var();
@@ -60,6 +68,8 @@ class Var: public Object{
     Type*& type();
     const char* getName();
     std::size_t& name_len();
+    AddrKind& addr_kind();
+    const char* getAddrKindName();
   private:
     const char* name_; // name 共享 输入buffer 制作， 不需要释放
     std::size_t name_len_;
@@ -67,6 +77,8 @@ class Var: public Object{
     int index_;
     int offset_; // codegen 再栈中的相对栈帧的偏移
     Type* type_;
+    AddrKind addr_kind_;
+    static const char* AddressKindNames[static_cast<int>(AddrKind::ADDR_COUNT)];
 };
 
 class Expr: public Object {
@@ -288,9 +300,9 @@ class WhileExpr: public NextExpr {
 class Function: public Object {
   public:
     Function();
-    Function(Expr* body, std::map<std::size_t, Var*>&& var_maps);
+    Function(Expr* body, std::map<std::size_t, Var*>&& local_vars);
     ~Function();
-    std::map<std::size_t, Var*>& var_maps();
+    std::map<std::size_t, Var*>& local_vars();
     void visualize(std::ostringstream& oss, int& ident_num);
     void codegen();
     Expr*& body();
@@ -305,7 +317,7 @@ class Function: public Object {
     const char* name_;
     std::size_t name_len_;
     std::map<std::size_t, Var*> parameters_;
-    std::map<std::size_t, Var*> var_maps_;
+    std::map<std::size_t, Var*> local_vars_;
 };
 
 class Ast: public Object{
@@ -317,9 +329,11 @@ class Ast: public Object{
     void codegen();
     int visualization(std::string filename);
     void set_entry_point(std::size_t entry_point);
-    const std::map<std::size_t, Function*>& functions();
+    std::map<std::size_t, Function*>& functions();
+    std::map<std::size_t, Var*>& global_vars();
   private:
     std::map<std::size_t, Function*> functions_;
+    std::map<std::size_t, Var*> global_vars_;
     std::size_t entry_function_;
 };
 
